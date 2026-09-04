@@ -4,15 +4,15 @@
   fetchurl,
 }:
 let
-  snapshot = "3c.0.20260729.253765";
+  source = import ./runtime-source.nix;
 in
 stdenvNoCC.mkDerivation {
   pname = "steam-runtime-steamrt-arm64";
-  version = snapshot;
+  version = source.snapshot;
 
   src = fetchurl {
-    url = "https://repo.steampowered.com/steamrt3c/images/${snapshot}/steam-runtime-steamrt-arm64.tar.xz";
-    hash = "sha256-0OIduVOLy9+lG0bwrLuoo9y9bl80WuQQpridm5C30J4=";
+    url = "${source.baseUrl}/${source.snapshot}/steam-runtime-steamrt-arm64.tar.xz";
+    inherit (source) hash;
   };
 
   sourceRoot = "steam-runtime-steamrt-arm64";

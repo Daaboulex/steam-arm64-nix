@@ -23,9 +23,21 @@ if [ ! -s "$steam_root/package/beta" ]; then
   printf '%s\n' "@channel@" >"$steam_root/package/beta"
 fi
 
+# The client draws one device pixel per logical pixel unless it is told the
+# desktop's scale, which X publishes as Xft.dpi against a 96 dpi base. Reading
+# it here keeps the client following the desktop instead of a pinned number.
+if [ -z "${STEAM_SCREEN_SCALE:-}" ]; then
+  dpi=$("@xrdb@" -query 2>/dev/null | sed -n 's/^Xft\.dpi:[[:space:]]*\([0-9]\{1,\}\)$/\1/p' | head -1)
+  if [ -n "${dpi:-}" ] && [ "$dpi" -gt 96 ]; then
+    if STEAM_SCREEN_SCALE=$(awk -v d="$dpi" 'BEGIN { printf "%g", d / 96 }'); then
+      export STEAM_SCREEN_SCALE
+    fi
+  fi
+fi
+
 # muvm gives the guest its own environment, so what it must inherit is named here.
 guest_env=(-e "STEAM_ARM64_ROOT=$steam_root")
-for var in XCURSOR_THEME XCURSOR_SIZE; do
+for var in XCURSOR_THEME XCURSOR_SIZE STEAM_SCREEN_SCALE; do
   if [ -n "${!var:-}" ]; then
     guest_env+=(-e "$var=${!var}")
   fi

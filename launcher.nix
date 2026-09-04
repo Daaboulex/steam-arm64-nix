@@ -5,6 +5,7 @@
   fetchurl,
   gnutar,
   makeDesktopItem,
+  xrdb,
   muvm,
   steam-arm64-client,
   steam-arm64-fhs,
@@ -47,6 +48,7 @@ runCommand "steam-arm64"
       replaceVars ./launcher.sh {
         client = "${steam-arm64-client}";
         muvm = lib.getExe muvmMasked;
+        xrdb = lib.getExe' xrdb "xrdb";
         fhs = "${steam-arm64-fhs}";
         inherit (import ./client-sources.nix) channel;
       }
