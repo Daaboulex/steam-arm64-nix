@@ -23,26 +23,13 @@ if [ ! -s "$steam_root/package/beta" ]; then
   printf '%s\n' "@channel@" >"$steam_root/package/beta"
 fi
 
-# The desktop publishes how it wants to be drawn in the X resource database:
-# Xft.dpi against a 96 dpi base, and the cursor's size and theme. Reading them
-# there is how every other X client learns the same thing, so the client follows
-# the desktop instead of carrying numbers of its own.
+# The desktop publishes the cursor it wants in the X resource database, which is
+# where every other X client reads it, so the client follows the desktop rather
+# than carrying a size and a theme name of its own.
 resources=$("@xrdb@" -query 2>/dev/null || true)
 xresource() {
   printf '%s\n' "$resources" | sed -n "s/^$1:[[:space:]]*\(.*\)\$/\1/p" | head -1
 }
-
-if [ -z "${STEAM_SCREEN_SCALE:-}" ]; then
-  dpi=$(xresource 'Xft\.dpi')
-  case "${dpi:-}" in
-  '' | *[!0-9]*) ;;
-  *)
-    if [ "$dpi" -gt 96 ] && scale=$(awk -v d="$dpi" 'BEGIN { printf "%g", d / 96 }'); then
-      export STEAM_SCREEN_SCALE="$scale"
-    fi
-    ;;
-  esac
-fi
 
 if [ -z "${XCURSOR_SIZE:-}" ]; then
   size=$(xresource 'Xcursor\.size')
@@ -61,7 +48,7 @@ fi
 
 # muvm gives the guest its own environment, so what it must inherit is named here.
 guest_env=(-e "STEAM_ARM64_ROOT=$steam_root")
-for var in XCURSOR_THEME XCURSOR_SIZE STEAM_SCREEN_SCALE DBUS_SESSION_BUS_ADDRESS; do
+for var in XCURSOR_THEME XCURSOR_SIZE DBUS_SESSION_BUS_ADDRESS; do
   if [ -n "${!var:-}" ]; then
     guest_env+=(-e "$var=${!var}")
   fi
