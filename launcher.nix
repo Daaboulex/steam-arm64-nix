@@ -30,9 +30,6 @@ let
       "x-scheme-handler/steamlink"
     ];
   };
-  muvmMasked = muvm.overrideAttrs (old: {
-    patches = (old.patches or [ ]) ++ [ ./muvm-mask-mit-shm.patch ];
-  });
 in
 runCommand "steam-arm64"
   {
@@ -47,7 +44,7 @@ runCommand "steam-arm64"
     install -Dm755 ${
       replaceVars ./launcher.sh {
         client = "${steam-arm64-client}";
-        muvm = lib.getExe muvmMasked;
+        muvm = lib.getExe muvm;
         xrdb = lib.getExe' xrdb "xrdb";
         fhs = "${steam-arm64-fhs}";
         inherit (import ./client-sources.nix) channel;
