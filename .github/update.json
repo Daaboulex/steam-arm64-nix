@@ -1,0 +1,24 @@
+{
+  "package": "steam-arm64-client",
+  "upstream": {
+    "type": "custom"
+  },
+  "packageFile": "client-sources.nix",
+  "hashes": [
+    "sha256"
+  ],
+  "platforms": {
+    "x86_64-linux": "Valve ships this client for aarch64 only; x86-64 uses nixpkgs' own steam"
+  },
+  "description": "Valve's aarch64 Steam client packaged for NixOS - pinned from Valve's own client manifest",
+  "topics": [
+    "nix",
+    "nixos",
+    "flake",
+    "steam",
+    "aarch64",
+    "asahi",
+    "apple-silicon",
+    "gaming"
+  ]
+}

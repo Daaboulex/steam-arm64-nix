@@ -1,0 +1,273 @@
+# Canonical Update workflow — Nix Packaging Standard.
+# Source of truth: github:Daaboulex/nix-packaging-standard. Bootstrapped into
+# each packaging repo by sync.sh; byte-identity enforced by the std-conformance
+# flake check (flakeModules.base) — do not edit per-repo copies.
+name: Update
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: DeterminateSystems/determinate-nix-action@527f17dd63d2d60d3e5552934bc84b9a33a14d11 # v3.22.2
+        with:
+          extra-conf: lazy-trees = false
+
+      - name: Run update
+        id: update
+        run: |
+          set +e
+          run_update() {
+            bash scripts/update.sh 2>&1 | tee /tmp/update.log
+            return "${PIPESTATUS[0]}" # update.sh's exit, NOT tee's (always 0)
+          }
+          transient_fetch_failure='crates\.io|error: cannot download|unable to download|http error 5[0-9][0-9]|status code: (403|429|5[0-9][0-9])|curl: \(|couldn.t resolve host|connection reset by peer|temporary failure in name resolution|operation timed out'
+          run_update
+          EXIT_CODE=$?
+          for backoff in 60 300 900; do
+            [ "$EXIT_CODE" -eq 0 ] && break
+            grep -qiE "$transient_fetch_failure" /tmp/update.log || break
+            echo "::warning::Transient external-fetch failure during update; retrying in ${backoff}s."
+            sleep "$backoff"
+            run_update
+            EXIT_CODE=$?
+          done
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          if [ -f /tmp/update-outputs.env ]; then
+            cat /tmp/update-outputs.env >> "$GITHUB_OUTPUT"
+          fi
+
+      # Exit 2 means "transient, retry next run", and a permanent failure
+      # reported that way keeps the run green forever (eden-nix#13: a 404 for
+      # two months). The Actions cache carries the count of consecutive exit-2
+      # runs across runs; a week of them is escalated below as `stalled`.
+      - name: Restore the transient-exit streak
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/update-streak
+          key: update-streak-${{ github.run_id }}
+          restore-keys: update-streak-
+      - name: Count consecutive transient exits
+        id: streak
+        env:
+          EXIT_CODE: ${{ steps.update.outputs.exit_code }}
+        run: |
+          n=0
+          if [ -f /tmp/update-streak ] && [[ "$(cat /tmp/update-streak)" =~ ^[0-9]+$ ]]; then
+            n=$(cat /tmp/update-streak)
+          fi
+          if [ "$EXIT_CODE" = "2" ]; then n=$((n + 1)); else n=0; fi
+          echo "$n" > /tmp/update-streak
+          echo "streak=$n" >> "$GITHUB_OUTPUT"
+          if [ "$n" -ge 7 ]; then
+            echo "::error::update.sh has exited 2 (transient, retry next run) on ${n} consecutive runs; a permanent failure is hiding behind the transient exit"
+            echo "stalled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Save the transient-exit streak
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/update-streak
+          key: update-streak-${{ github.run_id }}
+
+      # Silent success: commit + push
+      - name: Push update
+        if: steps.update.outputs.updated == 'true' && steps.update.outputs.exit_code == '0'
+        # Outputs pass via env, never interpolated into the run-block shell
+        # (an upstream tag with a quote or $(...) would otherwise inject).
+        env:
+          OLDV: ${{ steps.update.outputs.old_version }}
+          NEWV: ${{ steps.update.outputs.new_version }}
+          PKG: ${{ steps.update.outputs.package_name }}
+          AUTO_ADDED: ${{ steps.update.outputs.auto_added }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A ':!AI-*.json'
+          git diff --cached --quiet && { echo "No changes to commit"; exit 0; }
+          if [ -n "${AUTO_ADDED}" ]; then
+            git commit -m "chore: update ${PKG} ${OLDV} -> ${NEWV}" \
+              -m "New upstream python requirement(s) added to the env: ${AUTO_ADDED}."
+          else
+            git commit -m "chore: update ${PKG} ${OLDV} -> ${NEWV}"
+          fi
+          git push
+
+      # Auto-close previous failure issues on success. Keyed on exit_code alone:
+      # gating on `updated` too left a repo whose update was FIXED but whose
+      # upstream had not moved unable to ever clear its own ticket.
+      - name: Close resolved issues
+        if: steps.update.outputs.exit_code == '0'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9 (node24)
+        # Pass outputs via env, never interpolate ${{ }} into the script body
+        # (a value containing a quote/newline would break out of the JS).
+        env:
+          NEW_VERSION: ${{ steps.update.outputs.new_version }}
+          DID_UPDATE: ${{ steps.update.outputs.updated }}
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              labels: 'update-failed', state: 'open'
+            });
+            const body = process.env.DID_UPDATE === 'true'
+              ? `Resolved by auto-update to ${process.env.NEW_VERSION}.`
+              : 'Resolved: the update path now completes cleanly (upstream version unchanged).';
+            for (const issue of issues.data) {
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue.number, state: 'closed',
+                state_reason: 'completed'
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue.number,
+                body
+              });
+            }
+
+      # Diagnostic issue on failure. Keyed on exit_code==1 alone (not on
+      # `updated`) so config/version-read failures — which never reach the
+      # point of setting `updated` — still surface. A single exit 2 is
+      # transient and files nothing; a week-long streak of them is `stalled`.
+      - name: Create failure issue
+        if: steps.update.outputs.exit_code == '1' || steps.streak.outputs.stalled == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9 (node24)
+        # Pass outputs via env, never interpolate ${{ }} into the script body
+        # (a value containing a quote/newline would break out of the JS).
+        env:
+          ERROR_TYPE: ${{ steps.update.outputs.error_type || (steps.streak.outputs.stalled == 'true' && 'stalled') || '' }}
+          OLD_VERSION: ${{ steps.update.outputs.old_version }}
+          NEW_VERSION: ${{ steps.update.outputs.new_version }}
+          UPSTREAM_URL: ${{ steps.update.outputs.upstream_url }}
+          PKG: ${{ steps.update.outputs.package_name }}
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.readFileSync('/tmp/update.log', 'utf8');
+            const lastLines = log.split('\n').slice(-100).join('\n');
+            const errorType = process.env.ERROR_TYPE || 'unknown';
+            const oldV = process.env.OLD_VERSION || '?';
+            const newV = process.env.NEW_VERSION || '?';
+            const upstream = process.env.UPSTREAM_URL || '';
+            const pkg = process.env.PKG || context.repo.repo;
+
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              labels: 'update-failed', state: 'open'
+            });
+            for (const issue of existing.data) {
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue.number, state: 'closed',
+                state_reason: 'not_planned'
+              });
+            }
+
+            // execFileSync passes args straight to git — no shell, so a
+            // pkg/version value with shell metacharacters cannot inject.
+            const { execFileSync } = require('child_process');
+            const git = (...args) => execFileSync('git', args, { stdio: 'inherit' });
+            const branch = `update/${pkg}-${newV}`;
+            let branchPushed = false;
+            // remirror-needed (trackOnly) makes no file changes, and a stalled
+            // streak has no attempt to recover — skip the empty update branch;
+            // the issue itself is the notification.
+            if (errorType !== 'remirror-needed' && errorType !== 'stalled') {
+              try {
+                git('config', 'user.name', 'github-actions[bot]');
+                git('config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com');
+                git('checkout', '-B', branch);
+                git('add', '-A', ':!AI-*.json');
+                git('commit', '-m', `wip: attempted update ${oldV} -> ${newV}`, '--allow-empty');
+                git('push', '-f', 'origin', branch);
+                branchPushed = true;
+              } catch (e) { /* best-effort */ }
+            }
+
+            const recoveryBlock = branchPushed ? [
+              '### Recovery',
+              '```bash',
+              `git fetch && git checkout update/${pkg}-${newV}`,
+              '# Fix the issue, then:',
+              'nix build --no-link && nix flake check --no-build',
+              `git checkout main && git merge update/${pkg}-${newV}`,
+              '```'
+            ] : [];
+
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title: `Update ${pkg} ${oldV} -> ${newV}: ${errorType}`,
+              labels: ['update-failed'],
+              body: [
+                `## Update Failed: ${pkg} ${oldV} -> ${newV}`,
+                '',
+                `**Failure**: \`${errorType}\``,
+                upstream ? `**Upstream**: ${upstream}` : '',
+                '',
+                '### Build log (last 100 lines)',
+                '<details><summary>Click to expand</summary>',
+                '',
+                '```',
+                lastLines,
+                '```',
+                '</details>',
+                '',
+                ...recoveryBlock,
+                '',
+                '---',
+                '*Created by [update workflow](.github/workflows/update.yml)*'
+              ].filter(Boolean).join('\n')
+            });
+
+      # Exit 2 is a transient network failure: it resolves no issue, so it retires no branch.
+      # Only the default branch retires: a run dispatched on an update/* branch is WORKING on
+      # that branch, and this job would delete the ref that same run just pushed to.
+      - name: Retire attempt branches that no longer have an open issue
+        if: >-
+          github.ref_name == github.event.repository.default_branch
+          && (steps.update.outputs.exit_code == '0' || steps.update.outputs.exit_code == '1')
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9 (node24)
+        env:
+          PKG: ${{ steps.update.outputs.package_name }}
+          KEEP: ${{ steps.update.outputs.exit_code == '1' && steps.update.outputs.new_version || '' }}
+        with:
+          script: |
+            const pkg = process.env.PKG;
+            if (!pkg) {
+              core.info('no package_name reported; leaving every branch alone');
+              return;
+            }
+            const keep = process.env.KEEP
+              ? `refs/heads/update/${pkg}-${process.env.KEEP}`
+              : '';
+            let refs = [];
+            try {
+              const res = await github.rest.git.listMatchingRefs({
+                owner: context.repo.owner, repo: context.repo.repo,
+                ref: `heads/update/${pkg}-`
+              });
+              refs = res.data;
+            } catch (e) {
+              core.info(`could not list attempt branches: ${e.message}`);
+              return;
+            }
+            for (const r of refs) {
+              if (r.ref === keep) continue;
+              try {
+                await github.rest.git.deleteRef({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  ref: r.ref.replace('refs/', '')
+                });
+                core.info(`retired ${r.ref}`);
+              } catch (e) {
+                core.info(`could not retire ${r.ref}: ${e.message}`);
+              }
+            }
