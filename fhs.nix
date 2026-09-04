@@ -1,6 +1,7 @@
 {
   lib,
   buildFHSEnv,
+  replaceVars,
   glibcLocales,
   steam-runtime-arm64,
   runCommand,
@@ -14,7 +15,7 @@ let
     ];
   };
   guestRun = runCommand "steam-arm64-guest-run" { } ''
-    install -Dm755 ${./guest-run.sh} "$out"
+    install -Dm755 ${replaceVars ./guest-run.sh { dbusConf = "${./session-bus.conf}"; }} "$out"
   '';
 in
 buildFHSEnv {

@@ -29,6 +29,15 @@ fi
 
 steam_root="${STEAM_ARM64_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/Steam}"
 
-# The guest has no session bus of its own, and steam-runtime-launcher-service
-# exits without one. dbus-run-session gives the client a bus for its lifetime.
-exec dbus-run-session -- "$steam_root/steamrtarm64/steam" "$@"
+# The guest has no session bus of its own and the client's launcher service
+# exits without one. A bus that will not start must never stop the client, so
+# this is best effort and the client runs either way.
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+  if address=$(dbus-daemon --config-file=@dbusConf@ --fork --print-address 2>/dev/null); then
+    export DBUS_SESSION_BUS_ADDRESS="$address"
+  else
+    echo "steam-arm64: no session bus; the launcher service will stay off" >&2
+  fi
+fi
+
+exec "$steam_root/steamrtarm64/steam" "$@"
