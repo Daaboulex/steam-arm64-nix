@@ -2,6 +2,7 @@
   lib,
   buildFHSEnv,
   glibcLocales,
+  steam-runtime-arm64,
   runCommand,
 }:
 let
@@ -150,6 +151,7 @@ buildFHSEnv {
       libepoxy
       glew
       libbsd
+      fuse3
 
       ffmpeg_7
       nghttp2
@@ -158,6 +160,8 @@ buildFHSEnv {
   profile = ''
     unset GIO_EXTRA_MODULES
     export SDL_JOYSTICK_DISABLE_UDEV=1
+    export PATH="${steam-runtime-arm64}/bin:$PATH"
+    export FUSERMOUNT_PROG=/usr/bin/fusermount3
     export GTK_IM_MODULE=xim
     export LIBGL_DRIVERS_PATH=/run/opengl-driver/lib/dri
     export __EGL_VENDOR_LIBRARY_DIRS=/run/opengl-driver/share/glvnd/egl_vendor.d
