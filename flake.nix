@@ -93,6 +93,20 @@
             touch "$out"
           '';
 
+          checks.overlay-resolves =
+            let
+              overlaid = import inputs.nixpkgs {
+                inherit system;
+                config.allowUnfree = true;
+                overlays = [ inputs.self.overlays.default ];
+              };
+            in
+            pkgs.runCommand "steam-arm64-overlay-resolves" { } ''
+              test -x ${overlaid.steam-arm64}/bin/steam-arm64
+              test -x ${overlaid.steam-arm64-fhs}/bin/steam-arm64-fhs
+              touch "$out"
+            '';
+
           checks.client-tree = pkgs.runCommand "steam-arm64-client-tree" { } ''
             test -d ${self'.packages.default}/steamrtarm64/libs
             touch "$out"
@@ -103,6 +117,7 @@
         muvm = final.callPackage ./muvm-patched.nix { inherit (prev) muvm; };
         libdbusmenu-gtk2 = final.callPackage ./libdbusmenu-gtk2.nix { };
         libappindicator-gtk2 = final.callPackage ./libappindicator-gtk2.nix { };
+        steam-arm64-client = final.callPackage ./package.nix { };
         steam-runtime-arm64 = final.callPackage ./runtime.nix { };
         steam-arm64-fhs = final.callPackage ./fhs.nix { };
         steam-arm64 = final.callPackage ./launcher.nix { };
