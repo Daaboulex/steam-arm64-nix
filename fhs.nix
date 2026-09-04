@@ -35,6 +35,7 @@ buildFHSEnv {
       udev
       libcap
       networkmanager
+      kdePackages.breeze
 
       libasyncns
       bzip2
@@ -87,6 +88,11 @@ buildFHSEnv {
     export LIBGL_DRIVERS_PATH=/run/opengl-driver/lib/dri
     export __EGL_VENDOR_LIBRARY_DIRS=/run/opengl-driver/share/glvnd/egl_vendor.d
     export LIBVA_DRIVERS_PATH=/run/opengl-driver/lib/dri
+
+    # The guest has no XSETTINGS bridge, so an X11 client there falls back to
+    # the tiny core cursor unless it is told which theme to load.
+    export XCURSOR_THEME="''${XCURSOR_THEME:-breeze_cursors}"
+    export XCURSOR_SIZE="''${XCURSOR_SIZE:-24}"
   '';
 
   runScript = "${guestRun}";
