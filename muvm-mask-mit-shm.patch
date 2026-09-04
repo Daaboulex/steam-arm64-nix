@@ -1,0 +1,30 @@
+x11 bridge: stop advertising MIT-SHM to the guest
+
+The bridge forwards a QueryExtension for MIT-SHM to the host server and passes
+the reply back untouched, so a guest client concludes the extension is usable.
+It is not. The bridge proxies DRI3, SYNC and Present; nothing translates a
+shared-memory segment, so the client goes on to name a SysV id that means
+nothing in the host's IPC namespace, and the connection dies on ShmAttach.
+
+Rewriting the name it asks after leaves the server answering for an extension
+nobody implements, and the client takes the fallback path it already carries
+for servers without MIT-SHM. The request framing is untouched: the name keeps
+its length, only its first byte changes.
+
+Upstream: AsahiLinux/muvm#172, "Major opcode of failed request: 130 (MIT-SHM)",
+open since 2025-04-29 with no maintainer reply.
+
+--- a/crates/muvm/src/guest/bridge/x11.rs
++++ b/crates/muvm/src/guest/bridge/x11.rs
+@@ -315,6 +315,11 @@
+                 return Ok(StreamSendResult::WantMore);
+             }
+ 
++            // This bridge forwards MIT-SHM but does not proxy it, so a guest told the
++            // extension is present sends a SysV id that means nothing to the host.
++            if &buf[8..end] == b"MIT-SHM" {
++                buf[8] = b'X';
++            }
+             let name = String::from_utf8_lossy(&buf[8..end]);
+             if name == "DRI3" {
+                 this.protocol_handler.dri3_qe_resp_seq = Some(this.protocol_handler.seq_no);

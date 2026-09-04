@@ -38,6 +38,21 @@
             inherit (self'.packages) steam-arm64-fhs;
           };
 
+          pre-commit.settings.hooks = {
+            trim-trailing-whitespace.excludes = [ "\\.patch$" ];
+            end-of-file-fixer.excludes = [ "\\.patch$" ];
+          };
+
+          checks.muvm-shm-divergence = pkgs.runCommand "muvm-shm-divergence" { } ''
+            if grep -q MIT-SHM ${pkgs.muvm.src}/crates/muvm/src/guest/bridge/x11.rs; then
+              echo "muvm ${pkgs.muvm.version} now names MIT-SHM in its own X11 bridge."
+              echo "Read what it does there. If it masks or proxies the extension,"
+              echo "delete muvm-mask-mit-shm.patch, its override in launcher.nix, and this check."
+              exit 1
+            fi
+            touch "$out"
+          '';
+
           checks.client-tree = pkgs.runCommand "steam-arm64-client-tree" { } ''
             test -d ${self'.packages.default}/steamrtarm64/libs
             touch "$out"
