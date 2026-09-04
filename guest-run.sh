@@ -7,8 +7,6 @@ set -o pipefail
 if [ -e /usr/lib64/locale/locale-archive ]; then
   export LOCALE_ARCHIVE=/usr/lib64/locale/locale-archive
 fi
-export XCURSOR_THEME="${XCURSOR_THEME:-breeze_cursors}"
-export XCURSOR_SIZE="${XCURSOR_SIZE:-24}"
 
 # The loader enumerates every ICD it finds, so the drivers for hardware this
 # machine does not have each fail aloud. Name the ones that can apply instead.

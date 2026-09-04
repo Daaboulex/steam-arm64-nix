@@ -23,15 +23,39 @@ if [ ! -s "$steam_root/package/beta" ]; then
   printf '%s\n' "@channel@" >"$steam_root/package/beta"
 fi
 
-# The client draws one device pixel per logical pixel unless it is told the
-# desktop's scale, which X publishes as Xft.dpi against a 96 dpi base. Reading
-# it here keeps the client following the desktop instead of a pinned number.
+# The desktop publishes how it wants to be drawn in the X resource database:
+# Xft.dpi against a 96 dpi base, and the cursor's size and theme. Reading them
+# there is how every other X client learns the same thing, so the client follows
+# the desktop instead of carrying numbers of its own.
+resources=$("@xrdb@" -query 2>/dev/null || true)
+xresource() {
+  printf '%s\n' "$resources" | sed -n "s/^$1:[[:space:]]*\(.*\)\$/\1/p" | head -1
+}
+
 if [ -z "${STEAM_SCREEN_SCALE:-}" ]; then
-  dpi=$("@xrdb@" -query 2>/dev/null | sed -n 's/^Xft\.dpi:[[:space:]]*\([0-9]\{1,\}\)$/\1/p' | head -1)
-  if [ -n "${dpi:-}" ] && [ "$dpi" -gt 96 ]; then
-    if STEAM_SCREEN_SCALE=$(awk -v d="$dpi" 'BEGIN { printf "%g", d / 96 }'); then
-      export STEAM_SCREEN_SCALE
+  dpi=$(xresource 'Xft\.dpi')
+  case "${dpi:-}" in
+  '' | *[!0-9]*) ;;
+  *)
+    if [ "$dpi" -gt 96 ] && scale=$(awk -v d="$dpi" 'BEGIN { printf "%g", d / 96 }'); then
+      export STEAM_SCREEN_SCALE="$scale"
     fi
+    ;;
+  esac
+fi
+
+if [ -z "${XCURSOR_SIZE:-}" ]; then
+  size=$(xresource 'Xcursor\.size')
+  case "${size:-}" in
+  '' | *[!0-9]*) ;;
+  *) export XCURSOR_SIZE="$size" ;;
+  esac
+fi
+
+if [ -z "${XCURSOR_THEME:-}" ]; then
+  theme=$(xresource 'Xcursor\.theme')
+  if [ -n "${theme:-}" ]; then
+    export XCURSOR_THEME="$theme"
   fi
 fi
 
