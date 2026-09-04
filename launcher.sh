@@ -21,9 +21,21 @@ if [ ! -s "$steam_root/package/beta" ]; then
   printf '%s\n' "@channel@" >"$steam_root/package/beta"
 fi
 
-exec "@muvm@" \
-  --gpu-mode=drm \
-  --interactive \
-  -e "STEAM_ARM64_ROOT=$steam_root" \
-  -- \
-  "@fhs@/bin/steam-arm64-fhs" "$@"
+# Valve exits 42 to ask for a restart, which is how the client hands control
+# back after it updates itself.
+while :; do
+  set +o errexit
+  "@muvm@" \
+    --gpu-mode=drm \
+    --interactive \
+    -e "STEAM_ARM64_ROOT=$steam_root" \
+    -- \
+    "@fhs@/bin/steam-arm64-fhs" "$@"
+  status=$?
+  set -o errexit
+
+  if [ "$status" -ne 42 ]; then
+    exit "$status"
+  fi
+  echo "steam-arm64: Steam asked to restart" >&2
+done

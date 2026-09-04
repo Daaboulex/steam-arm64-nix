@@ -36,14 +36,14 @@ buildFHSEnv {
       libcap
       networkmanager
 
-      xorg.libX11
-      xorg.libXext
-      xorg.libXfixes
-      xorg.libXi
-      xorg.libXrandr
-      xorg.libXrender
-      xorg.libXScrnSaver
-      xorg.libxcb
+      libx11
+      libxext
+      libxfixes
+      libxi
+      libxrandr
+      libxrender
+      libxscrnsaver
+      libxcb
       libxkbcommon
       wayland
 
