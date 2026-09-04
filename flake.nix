@@ -32,6 +32,11 @@
         in
         {
           packages.default = pkgs.callPackage ./package.nix { };
+          packages.steam-arm64-fhs = pkgs.callPackage ./fhs.nix { };
+          packages.steam-arm64 = pkgs.callPackage ./launcher.nix {
+            steam-arm64-client = self'.packages.default;
+            inherit (self'.packages) steam-arm64-fhs;
+          };
 
           checks.client-tree = pkgs.runCommand "steam-arm64-client-tree" { } ''
             test -d ${self'.packages.default}/steamrtarm64/libs
@@ -41,6 +46,8 @@
 
       flake.overlays.default = final: _prev: {
         steam-arm64-client = final.callPackage ./package.nix { };
+        steam-arm64-fhs = final.callPackage ./fhs.nix { };
+        steam-arm64 = final.callPackage ./launcher.nix { };
       };
     };
 }
