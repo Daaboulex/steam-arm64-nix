@@ -2,12 +2,20 @@
   lib,
   runCommand,
   replaceVars,
+  fetchurl,
+  gnutar,
   makeDesktopItem,
   muvm,
   steam-arm64-client,
   steam-arm64-fhs,
 }:
 let
+  # Valve ships the application icons in its desktop launcher tarball, not in
+  # the client payload, which carries only tray icons.
+  launcherTarball = fetchurl {
+    url = "https://repo.steampowered.com/steam/archive/stable/steam_1.0.0.87.tar.gz";
+    hash = "sha256-ZJN10vk3f4AJqvPi/wmXgEHrkRSJfZxaOIbx2C4nuh8=";
+  };
   desktopItem = makeDesktopItem {
     name = "steam-arm64";
     desktopName = "Steam";
@@ -41,8 +49,11 @@ runCommand "steam-arm64"
       }
     } "$out/bin/steam-arm64"
 
-    install -Dm644 ${steam-arm64-client}/public/steam_tray_mono.png \
-      "$out/share/icons/hicolor/32x32/apps/steam.png"
+    ${gnutar}/bin/tar -xzf ${launcherTarball} --strip-components=1 steam-launcher/icons
+    for size in 16 24 32 48 256; do
+      install -Dm644 "icons/$size/steam.png" \
+        "$out/share/icons/hicolor/''${size}x''${size}/apps/steam.png"
+    done
     mkdir -p "$out/share"
     cp -r ${desktopItem}/share/applications "$out/share/"
   ''
