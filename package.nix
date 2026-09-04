@@ -41,8 +41,8 @@ stdenvNoCC.mkDerivation {
         continue
       fi
       if [ -d "$target" ]; then
-        rm -f "$entry"
-        continue
+        echo "$entry collides with the directory $target" >&2
+        exit 1
       fi
       mkdir -p "$(dirname "$target")"
       mv "$entry" "$target"
@@ -51,9 +51,9 @@ stdenvNoCC.mkDerivation {
     test -f "$out/steamrtarm64/steam"
 
     while IFS= read -r -d "" candidate; do
-      if [ "$(head -c 4 "$candidate" | od -An -tx1 | tr -d ' \n')" = "7f454c46" ]; then
-        chmod +x "$candidate"
-      fi
+      case "$(head -c 4 "$candidate" | od -An -tx1 | tr -d ' \n')" in
+      7f454c46 | 2321*) chmod +x "$candidate" ;;
+      esac
     done < <(find "$out" -type f -print0)
 
     test -x "$out/steamrtarm64/steam"
@@ -66,6 +66,5 @@ stdenvNoCC.mkDerivation {
     license = lib.licenses.unfree;
     sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
     platforms = [ "aarch64-linux" ];
-    mainProgram = "steam";
   };
 }

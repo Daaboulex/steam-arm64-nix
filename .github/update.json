@@ -3,10 +3,7 @@
   "upstream": {
     "type": "custom"
   },
-  "packageFile": "client-sources.nix",
-  "hashes": [
-    "sha256"
-  ],
+  "packageFile": "package.nix",
   "platforms": {
     "x86_64-linux": "Valve ships this client for aarch64 only; x86-64 uses nixpkgs' own steam"
   },

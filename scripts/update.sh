@@ -1,35 +1,62 @@
 #!/usr/bin/env bash
-# Regenerates client-sources.nix from Valve's own client manifest.
-# The manifest carries each component's sha256, so no download is needed.
-set -o errexit
-set -o nounset
-set -o pipefail
+set -euo pipefail
+
+OUTPUT_FILE="${GITHUB_OUTPUT:-/tmp/update-outputs.env}"
+: >"$OUTPUT_FILE"
+output() { echo "$1=$2" >>"$OUTPUT_FILE"; }
+log() { echo "==> $*"; }
+err() { echo "::error::$*"; }
 
 readonly BASE_URL="https://client-update.fastly.steamstatic.com"
-
-channel="${1:-publicbeta}"
-case "$channel" in
-publicbeta) manifest="steam_client_publicbeta_linuxarm64" ;;
-stable) manifest="steam_client_linuxarm64" ;;
-*)
-  echo "update.sh: unknown channel '$channel' (publicbeta|stable)" >&2
-  exit 1
-  ;;
-esac
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out="$repo_root/client-sources.nix"
 
+output "package_name" "steam-arm64-client"
+output "upstream_url" "$BASE_URL"
+
+channel="${1:-}"
+if [ -z "$channel" ] && [ -f "$out" ]; then
+  channel="$(sed -nE 's/^  channel = "([a-z]+)";$/\1/p' "$out" | head -1)"
+fi
+channel="${channel:-publicbeta}"
+
+case "$channel" in
+publicbeta) manifest="steam_client_publicbeta_linuxarm64" ;;
+stable) manifest="steam_client_linuxarm64" ;;
+*)
+  err "unknown channel '$channel' (publicbeta|stable)"
+  output "updated" "false"
+  output "error_type" "bad-channel"
+  exit 1
+  ;;
+esac
+
+old_version=""
+if [ -f "$out" ]; then
+  old_version="$(sed -nE 's/^  version = "([0-9]+)";$/\1/p' "$out" | head -1)"
+fi
+output "old_version" "$old_version"
+
 vdf="$(mktemp)"
 trap 'rm -f "$vdf"' EXIT
-curl -fsSL "$BASE_URL/$manifest" -o "$vdf"
+if ! curl -fsSL "$BASE_URL/$manifest" -o "$vdf"; then
+  err "could not fetch $manifest"
+  output "updated" "false"
+  output "error_type" "manifest-fetch"
+  exit 2
+fi
 
 version="$(awk -F'"' '/"version"/ { print $4; exit }' "$vdf")"
 if [ -z "$version" ]; then
-  echo "update.sh: no version in $manifest; the manifest shape changed" >&2
+  err "no version in $manifest; the manifest shape changed"
+  output "updated" "false"
+  output "error_type" "manifest-shape"
   exit 1
 fi
+output "new_version" "$version"
 
+wanted="$(grep -cE '^\t"[a-z0-9_]+(_all|_linuxarm64_linuxarm64)"$' "$vdf" || true)"
 components="$(awk '
   /^\t"[a-z0-9_]+"$/ { name = $1; gsub(/"/, "", name) }
   /"file"/ { gsub(/"/, ""); file = $2 }
@@ -40,9 +67,18 @@ components="$(awk '
   }
 ' "$vdf")"
 
-if [ -z "$components" ]; then
-  echo "update.sh: no linuxarm64 components in $manifest; the manifest shape changed" >&2
+emitted="$(grep -c 'sha256 = ' <<<"$components" || true)"
+if [ "$emitted" -eq 0 ] || [ "$emitted" -ne "$wanted" ]; then
+  err "manifest lists $wanted linuxarm64 components but $emitted were pinned; the manifest shape changed"
+  output "updated" "false"
+  output "error_type" "manifest-shape"
   exit 1
+fi
+
+if [ "$version" = "$old_version" ]; then
+  log "$channel already at $version"
+  output "updated" "false"
+  exit 0
 fi
 
 {
@@ -57,5 +93,13 @@ fi
   printf '}\n'
 } >"$out"
 
-printf 'update.sh: %s pinned at version %s (%d components)\n' \
-  "$channel" "$version" "$(grep -c 'sha256 = ' "$out")"
+log "verifying the new pin builds"
+if ! nix build "$repo_root#default" --no-link; then
+  err "the regenerated pin does not build"
+  output "updated" "false"
+  output "error_type" "build-error"
+  exit 1
+fi
+
+log "$channel updated $old_version -> $version ($emitted components)"
+output "updated" "true"

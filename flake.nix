@@ -25,7 +25,6 @@
       perSystem =
         { system, self', ... }:
         let
-          # Valve's client is an unfree prebuilt binary.
           pkgs = import inputs.nixpkgs {
             inherit system;
             config.allowUnfree = true;
@@ -35,7 +34,6 @@
           packages.default = pkgs.callPackage ./package.nix { };
 
           checks.client-tree = pkgs.runCommand "steam-arm64-client-tree" { } ''
-            test -x ${self'.packages.default}/steamrtarm64/steam
             test -d ${self'.packages.default}/steamrtarm64/libs
             touch "$out"
           '';
