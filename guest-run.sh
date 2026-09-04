@@ -32,6 +32,18 @@ steam_root="${STEAM_ARM64_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/Steam}"
 # The guest has no session bus of its own and the client's launcher service
 # exits without one. A bus that will not start must never stop the client, so
 # this is best effort and the client runs either way.
+# The desktop's own bus is what the tray needs: an indicator that finds no
+# StatusNotifierWatcher falls back to an XEmbed icon, and an XEmbed icon has no
+# menu. The host's socket is on the shared filesystem, so try it and prove it
+# answers before trusting it; a bus of our own is the fallback.
+if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+  if ! dbus-send --session --print-reply --dest=org.freedesktop.DBus \
+    / org.freedesktop.DBus.ListNames >/dev/null 2>&1; then
+    echo "steam-arm64: the desktop bus is not reachable from the guest" >&2
+    unset DBUS_SESSION_BUS_ADDRESS
+  fi
+fi
+
 if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
   if address=$(dbus-daemon --config-file=@dbusConf@ --fork --print-address 2>/dev/null); then
     export DBUS_SESSION_BUS_ADDRESS="$address"

@@ -37,7 +37,7 @@ fi
 
 # muvm gives the guest its own environment, so what it must inherit is named here.
 guest_env=(-e "STEAM_ARM64_ROOT=$steam_root")
-for var in XCURSOR_THEME XCURSOR_SIZE STEAM_SCREEN_SCALE; do
+for var in XCURSOR_THEME XCURSOR_SIZE STEAM_SCREEN_SCALE DBUS_SESSION_BUS_ADDRESS; do
   if [ -n "${!var:-}" ]; then
     guest_env+=(-e "$var=${!var}")
   fi
