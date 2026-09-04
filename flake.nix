@@ -107,6 +107,15 @@
               touch "$out"
             '';
 
+          checks.cursor-theme = pkgs.runCommand "steam-arm64-cursor-theme" { } ''
+            rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-arm64-fhs-fhsenv-rootfs' \
+              ${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs | head -1)
+            test -n "$rootfs"
+            test ! -L "$rootfs/usr/share/icons/default"
+            test -f "$rootfs/usr/share/icons/default/cursors/left_ptr"
+            touch "$out"
+          '';
+
           checks.client-tree = pkgs.runCommand "steam-arm64-client-tree" { } ''
             test -d ${self'.packages.default}/steamrtarm64/libs
             touch "$out"

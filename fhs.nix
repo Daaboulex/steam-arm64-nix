@@ -1,6 +1,7 @@
 {
   lib,
   buildFHSEnv,
+  kdePackages,
   replaceVars,
   glibcLocales,
   steam-runtime-arm64,
@@ -177,6 +178,12 @@ buildFHSEnv {
         export TZ="$new_TZ"
       fi
     fi
+  '';
+
+  extraBuildCommands = ''
+    mkdir -p "$out/usr/share/icons"
+    cp -rL ${kdePackages.breeze}/share/icons/breeze_cursors "$out/usr/share/icons/default"
+    chmod -R u+w "$out/usr/share/icons/default"
   '';
 
   runScript = "${guestRun}";
