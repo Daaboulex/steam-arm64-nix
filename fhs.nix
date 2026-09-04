@@ -36,7 +36,26 @@ buildFHSEnv {
       libcap
       networkmanager
 
+      libasyncns
+      bzip2
+      glib
+      gtk2
+      ibus
+      libogg
+      libvorbis
+      libvpx
+      libsndfile
+      openal
+      libvdpau
+      pipewire
+
       libx11
+      libice
+      libsm
+      libxcomposite
+      libxdamage
+      libxinerama
+      libxtst
       libxext
       libxfixes
       libxi
