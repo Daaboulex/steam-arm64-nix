@@ -21,6 +21,14 @@ if [ ! -s "$steam_root/package/beta" ]; then
   printf '%s\n' "@channel@" >"$steam_root/package/beta"
 fi
 
+# muvm gives the guest its own environment, so what it must inherit is named here.
+guest_env=(-e "STEAM_ARM64_ROOT=$steam_root")
+for var in XCURSOR_THEME XCURSOR_SIZE; do
+  if [ -n "${!var:-}" ]; then
+    guest_env+=(-e "$var=${!var}")
+  fi
+done
+
 # Valve exits 42 to ask for a restart, which is how the client hands control
 # back after it updates itself.
 while :; do
@@ -28,7 +36,7 @@ while :; do
   "@muvm@" \
     --gpu-mode=drm \
     --interactive \
-    -e "STEAM_ARM64_ROOT=$steam_root" \
+    "${guest_env[@]}" \
     -- \
     "@fhs@/bin/steam-arm64-fhs" "$@"
   status=$?
