@@ -1,9 +1,17 @@
 {
   lib,
   buildFHSEnv,
+  glibcLocales,
   runCommand,
 }:
 let
+  locales = glibcLocales.override {
+    allLocales = false;
+    locales = [
+      "en_US.UTF-8/UTF-8"
+      "de_DE.UTF-8/UTF-8"
+    ];
+  };
   guestRun = runCommand "steam-arm64-guest-run" { } ''
     install -Dm755 ${./guest-run.sh} "$out"
   '';
@@ -149,13 +157,8 @@ buildFHSEnv {
     export LIBGL_DRIVERS_PATH=/run/opengl-driver/lib/dri
     export __EGL_VENDOR_LIBRARY_DIRS=/run/opengl-driver/share/glvnd/egl_vendor.d
     export LIBVA_DRIVERS_PATH=/run/opengl-driver/lib/dri
+    export LOCALE_ARCHIVE=${locales}/lib/locale/locale-archive
 
-    if [ -e /usr/lib64/locale/locale-archive ]; then
-      export LOCALE_ARCHIVE=/usr/lib64/locale/locale-archive
-    fi
-
-    export XCURSOR_THEME="''${XCURSOR_THEME:-breeze_cursors}"
-    export XCURSOR_SIZE="''${XCURSOR_SIZE:-24}"
   '';
 
   runScript = "${guestRun}";
