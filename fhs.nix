@@ -150,6 +150,10 @@ buildFHSEnv {
       libepoxy
       glew
       libbsd
+
+      ffmpeg_7
+      nghttp2
+      speechd
     ];
   profile = ''
     unset GIO_EXTRA_MODULES
