@@ -33,6 +33,7 @@ buildFHSEnv {
       libva
       vulkan-loader
       udev
+      libudev0-shim
       libcap
       networkmanager
       kdePackages.breeze
@@ -49,6 +50,11 @@ buildFHSEnv {
       openal
       libvdpau
       pipewire
+      libopus
+      flac
+      libsamplerate
+
+      SDL2
 
       libx11
       libice
@@ -65,7 +71,53 @@ buildFHSEnv {
       libxscrnsaver
       libxcb
       libxkbcommon
+      libxcursor
+      libxau
+      libxdmcp
+      libxshmfence
+      libxft
+      libxt
+      libxmu
+      libxpm
+      libxxf86vm
+      xcbutil
+      xcbutilimage
+      xcbutilkeysyms
+      xcbutilrenderutil
+      xcbutilwm
       wayland
+      libdecor
+
+      libpng
+      libjpeg_turbo
+      libtiff
+      libwebp
+      pixman
+      harfbuzz
+      fribidi
+      libthai
+      libdatrie
+      graphite2
+      icu
+
+      curl
+      openssl
+      gnutls
+      nettle
+      libidn2
+      libpsl
+      libssh2
+
+      zlib
+      zstd
+      lz4
+      brotli
+
+      libusb1
+      libevdev
+      libinput
+      libwacom
+      libgudev
 
       alsa-lib
       libpulseaudio
@@ -81,6 +133,15 @@ buildFHSEnv {
       expat
       fontconfig
       freetype
+      libnotify
+      libsecret
+      sqlite
+      dconf
+      libxml2
+      json-glib
+      libepoxy
+      glew
+      libbsd
     ];
   profile = ''
     unset GIO_EXTRA_MODULES
@@ -89,8 +150,10 @@ buildFHSEnv {
     export __EGL_VENDOR_LIBRARY_DIRS=/run/opengl-driver/share/glvnd/egl_vendor.d
     export LIBVA_DRIVERS_PATH=/run/opengl-driver/lib/dri
 
-    # The guest has no XSETTINGS bridge, so an X11 client there falls back to
-    # the tiny core cursor unless it is told which theme to load.
+    if [ -e /usr/lib64/locale/locale-archive ]; then
+      export LOCALE_ARCHIVE=/usr/lib64/locale/locale-archive
+    fi
+
     export XCURSOR_THEME="''${XCURSOR_THEME:-breeze_cursors}"
     export XCURSOR_SIZE="''${XCURSOR_SIZE:-24}"
   '';
