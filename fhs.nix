@@ -154,11 +154,18 @@ buildFHSEnv {
   profile = ''
     unset GIO_EXTRA_MODULES
     export SDL_JOYSTICK_DISABLE_UDEV=1
+    export GTK_IM_MODULE=xim
     export LIBGL_DRIVERS_PATH=/run/opengl-driver/lib/dri
     export __EGL_VENDOR_LIBRARY_DIRS=/run/opengl-driver/share/glvnd/egl_vendor.d
     export LIBVA_DRIVERS_PATH=/run/opengl-driver/lib/dri
+    export VDPAU_DRIVER_PATH=/run/opengl-driver/lib/vdpau
     export LOCALE_ARCHIVE=${locales}/lib/locale/locale-archive
 
+    if [ -z ''${TZ+x} ]; then
+      if new_TZ=$(readlink -f /etc/localtime | grep -P -o '(?<=/zoneinfo/).*$'); then
+        export TZ="$new_TZ"
+      fi
+    fi
   '';
 
   runScript = "${guestRun}";
