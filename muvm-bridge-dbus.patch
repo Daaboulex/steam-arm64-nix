@@ -1,0 +1,80 @@
+bridge the session bus into the guest, the way pulse already is
+
+muvm forwards X11, PipeWire and PulseAudio and leaves the message bus behind, so
+anything in the guest that speaks D-Bus finds nothing. A tray icon is the visible
+case: an indicator that cannot reach org.kde.StatusNotifierWatcher falls back to
+an XEmbed icon, and an XEmbed icon has no menu.
+
+The mechanism is already here. PulseAudio is bridged with one krun_add_vsock_port
+on the host and one setup_socket_proxy in the guest, and the session bus needs
+exactly the same pair. The socket lands on the guest's own runtime directory as
+"bus", which is where a client looks when DBUS_SESSION_BUS_ADDRESS is unset, so
+nothing has to be told about it.
+
+The host side is guarded on the socket existing, as pulse is, so a session
+without a bus is unchanged.
+
+Upstream: AsahiLinux/muvm#6 and #187, both open with no maintainer reply.
+
+--- a/crates/muvm/src/utils/launch.rs
++++ b/crates/muvm/src/utils/launch.rs
+@@ -51,3 +51,4 @@
+ pub const PULSE_SOCKET: u32 = 3333;
+ pub const HIDPIPE_SOCKET: u32 = PULSE_SOCKET + 1;
+ pub const MUVM_GUEST_SOCKET: u32 = HIDPIPE_SOCKET + 1;
++pub const DBUS_SOCKET: u32 = MUVM_GUEST_SOCKET + 1;
+--- a/crates/muvm/src/bin/muvm.rs
++++ b/crates/muvm/src/bin/muvm.rs
+@@ -25,7 +25,7 @@
+ use muvm::net::{connect_to_passt, start_passt};
+ use muvm::types::MiB;
+ use muvm::utils::launch::{
+-    GuestConfiguration, Launch, HIDPIPE_SOCKET, MUVM_GUEST_SOCKET, PULSE_SOCKET,
++    GuestConfiguration, Launch, DBUS_SOCKET, HIDPIPE_SOCKET, MUVM_GUEST_SOCKET, PULSE_SOCKET,
+ };
+ use nix::sys::sysinfo::sysinfo;
+ use nix::unistd::User;
+@@ -308,6 +308,22 @@
+             }
+         }
+ 
++        let dbus_path = Path::new(&run_path).join("bus");
++        if dbus_path.exists() {
++            let dbus_path = CString::new(
++                dbus_path
++                    .to_str()
++                    .expect("dbus_path should not contain invalid UTF-8"),
++            )
++            .context("Failed to process `bus` path as it contains NUL character")?;
++            // SAFETY: `dbus_path` is a pointer to a `CString` with long enough lifetime.
++            let err = unsafe { krun_add_vsock_port(ctx_id, DBUS_SOCKET, dbus_path.as_ptr()) };
++            if err < 0 {
++                let err = Errno::from_raw_os_error(-err);
++                return Err(err).context("Failed to configure vsock for dbus socket");
++            }
++        }
++
+         let hidpipe_path = Path::new(&run_path).join("hidpipe");
+         spawn_hidpipe_server(hidpipe_path.clone()).context("Failed to spawn hidpipe thread")?;
+         let hidpipe_path = CString::new(
+--- a/crates/muvm/src/guest/bin/muvm-guest.rs
++++ b/crates/muvm/src/guest/bin/muvm-guest.rs
+@@ -18,7 +18,7 @@
+ use muvm::guest::user::setup_user;
+ use muvm::guest::x11::setup_x11_forwarding;
+ use muvm::utils::env::get_var_if_exists;
+-use muvm::utils::launch::{Emulator, GuestConfiguration, PULSE_SOCKET};
++use muvm::utils::launch::{Emulator, GuestConfiguration, DBUS_SOCKET, PULSE_SOCKET};
+ use nix::unistd::{Gid, Uid};
+ use rustix::process::{getrlimit, setrlimit, Resource};
+ 
+@@ -143,6 +143,9 @@
+     let pulse_path = pulse_path.join("native");
+     setup_socket_proxy(pulse_path, PULSE_SOCKET)?;
+ 
++    let dbus_path = run_path.join("bus");
++    setup_socket_proxy(dbus_path, DBUS_SOCKET)?;
++
+     if let Some(host_display) = options.host_display {
+         setup_x11_forwarding(run_path, &host_display)?;
+     }

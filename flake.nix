@@ -50,17 +50,19 @@
           pre-commit.settings.hooks = {
             trim-trailing-whitespace.excludes = [ "\\.patch$" ];
             end-of-file-fixer.excludes = [ "\\.patch$" ];
+            typos.excludes = [ "\\.patch$" ];
           };
 
-          checks.muvm-shm-applied =
+          checks.muvm-patches-apply =
             let
               patched = pkgs.callPackage ./muvm-patched.nix { };
             in
-            pkgs.runCommand "muvm-shm-applied" { nativeBuildInputs = [ pkgs.gnupatch ]; } ''
+            pkgs.runCommand "muvm-patches-apply" { nativeBuildInputs = [ pkgs.gnupatch ]; } ''
               cp -r ${patched.src} src
               chmod -R +w src
               cd src
-              patch -p1 --dry-run <${./muvm-mask-mit-shm.patch}
+              patch -p1 <${./muvm-mask-mit-shm.patch}
+              patch -p1 <${./muvm-bridge-dbus.patch}
               touch "$out"
             '';
 
