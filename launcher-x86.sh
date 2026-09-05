@@ -7,16 +7,23 @@ set -o pipefail
 # inside muvm's 4K-page guest. Nothing here reads the host's binfmt, so it
 # behaves the same whether or not the machine registers one.
 #
-# It is given a home of its own. The aarch64 client owns ~/.steam and
-# ~/.local/share/Steam, and two clients of different architectures sharing one
-# library and one runtime tree is how a working install gets broken.
-home="${STEAM_X86_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/steam-x86}"
-mkdir -p -- "$home"
-export HOME="$home"
+# muvm registers FEX as the guest's own binfmt handler and looks for
+# FEXInterpreter on PATH to do it, so the guest is given a PATH that has it.
+# Without that the client starts and its x86 children do not.
+#
+# The Apple GPU driver is aarch64, so an x86 client cannot use it, and glX
+# fails outright rather than degrading. It is pointed at the x86 software
+# renderer instead: slow, and the alternative is a fatal assert on startup.
+#
+# The client shares ~/.local/share/Steam with the aarch64 one, which is Valve's
+# own arrangement: each architecture keeps its own installed manifest there.
 
 exec "@muvm@" \
   --gpu-mode=drm \
   --interactive \
-  -e "HOME=$home" \
+  -e "PATH=@fexbin@:/run/current-system/sw/bin" \
+  -e "LIBGL_DRIVERS_PATH=@x86dri@" \
+  -e "LIBGL_ALWAYS_SOFTWARE=1" \
+  -e "GALLIUM_DRIVER=llvmpipe" \
   -- \
   "@fexinterpreter@" "@shell@" "@steam@" "$@"

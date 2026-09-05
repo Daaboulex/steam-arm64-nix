@@ -49,6 +49,7 @@
             muvm = pkgs.callPackage ./muvm-patched.nix { };
             steam-x86-client = pkgsX86.steam;
             steam-x86-shell = pkgsX86.bashInteractive;
+            steam-x86-mesa = pkgsX86.mesa;
           };
 
           packages.steam-arm64 = pkgs.callPackage ./launcher.nix {

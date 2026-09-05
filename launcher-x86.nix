@@ -7,6 +7,7 @@
   fex,
   steam-x86-client,
   steam-x86-shell,
+  steam-x86-mesa,
 }:
 let
   # FEX decides what it is from argv0, and the package ships no FEXInterpreter,
@@ -41,6 +42,8 @@ runCommand "steam-x86"
       replaceVars ./launcher-x86.sh {
         muvm = lib.getExe muvm;
         fexinterpreter = "${fexInterpreter}/bin/FEXInterpreter";
+        fexbin = "${fexInterpreter}/bin";
+        x86dri = "${steam-x86-mesa}/lib/dri";
         shell = lib.getExe steam-x86-shell;
         steam = "${steam-x86-client}/bin/steam";
       }
@@ -49,6 +52,7 @@ runCommand "steam-x86"
     test -x ${fexInterpreter}/bin/FEXInterpreter
     test -x ${steam-x86-client}/bin/steam
     test -x ${lib.getExe steam-x86-shell}
+    test -d ${steam-x86-mesa}/lib/dri
 
     mkdir -p "$out/share"
     cp -r ${desktopItem}/share/applications "$out/share/"
