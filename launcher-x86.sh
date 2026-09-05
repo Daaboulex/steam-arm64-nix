@@ -8,22 +8,25 @@ set -o pipefail
 # behaves the same whether or not the machine registers one.
 #
 # muvm registers FEX as the guest's own binfmt handler and looks for
-# FEXInterpreter on PATH to do it, so the guest is given a PATH that has it.
-# Without that the client starts and its x86 children do not.
+# FEXInterpreter on PATH to do it. Without that the client starts and its x86
+# children do not.
 #
-# The Apple GPU driver is aarch64, so an x86 client cannot use it, and glX
-# fails outright rather than degrading. It is pointed at the x86 software
-# renderer instead: slow, and the alternative is a fatal assert on startup.
-#
-# The client shares ~/.local/share/Steam with the aarch64 one, which is Valve's
-# own arrangement: each architecture keeps its own installed manifest there.
+# The client goes through steam-run rather than the steam wrapper, because that
+# wrapper's profile exports LIBGL_DRIVERS_PATH unconditionally at the NixOS
+# driver paths, which on this machine hold aarch64 drivers an x86 client cannot
+# load. A command steam-run is given runs after that profile, so the drivers
+# named here are the ones that survive. They are the software renderer: the
+# Apple GPU driver is aarch64, so an x86 client has no hardware path at all, and
+# glX fails outright rather than degrading.
 
 exec "@muvm@" \
   --gpu-mode=drm \
   --interactive \
   -e "PATH=@fexbin@:/run/current-system/sw/bin" \
-  -e "LIBGL_DRIVERS_PATH=@x86dri@" \
-  -e "LIBGL_ALWAYS_SOFTWARE=1" \
-  -e "GALLIUM_DRIVER=llvmpipe" \
   -- \
-  "@fexinterpreter@" "@shell@" "@steam@" "$@"
+  "@fexinterpreter@" "@shell@" "@steamrun@" /bin/bash -c '
+    export LIBGL_DRIVERS_PATH="@mesa32@/lib/dri:@mesa64@/lib/dri"
+    export LIBGL_ALWAYS_SOFTWARE=1
+    export GALLIUM_DRIVER=llvmpipe
+    exec "@steam@" "$@"
+  ' steam-x86 "$@"

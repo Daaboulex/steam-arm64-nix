@@ -5,9 +5,11 @@
   makeDesktopItem,
   muvm,
   fex,
-  steam-x86-client,
+  steam-x86-run,
+  steam-x86-entry,
   steam-x86-shell,
-  steam-x86-mesa,
+  steam-x86-mesa32,
+  steam-x86-mesa64,
 }:
 let
   # FEX decides what it is from argv0, and the package ships no FEXInterpreter,
@@ -43,16 +45,20 @@ runCommand "steam-x86"
         muvm = lib.getExe muvm;
         fexinterpreter = "${fexInterpreter}/bin/FEXInterpreter";
         fexbin = "${fexInterpreter}/bin";
-        x86dri = "${steam-x86-mesa}/lib/dri";
+        steamrun = lib.getExe steam-x86-run;
+        mesa32 = "${steam-x86-mesa32}";
+        mesa64 = "${steam-x86-mesa64}";
         shell = lib.getExe steam-x86-shell;
-        steam = "${steam-x86-client}/bin/steam";
+        steam = "${steam-x86-entry}/bin/steam";
       }
     } "$out/bin/steam-x86"
 
     test -x ${fexInterpreter}/bin/FEXInterpreter
-    test -x ${steam-x86-client}/bin/steam
+    test -x ${steam-x86-entry}/bin/steam
+    test -x ${lib.getExe steam-x86-run}
     test -x ${lib.getExe steam-x86-shell}
-    test -d ${steam-x86-mesa}/lib/dri
+    test -d ${steam-x86-mesa32}/lib/dri
+    test -d ${steam-x86-mesa64}/lib/dri
 
     mkdir -p "$out/share"
     cp -r ${desktopItem}/share/applications "$out/share/"

@@ -47,9 +47,11 @@
           };
           packages.steam-x86 = pkgs.callPackage ./launcher-x86.nix {
             muvm = pkgs.callPackage ./muvm-patched.nix { };
-            steam-x86-client = pkgsX86.steam;
+            steam-x86-run = pkgsX86.steam-run;
+            steam-x86-entry = pkgsX86.steam-unwrapped;
             steam-x86-shell = pkgsX86.bashInteractive;
-            steam-x86-mesa = pkgsX86.mesa;
+            steam-x86-mesa32 = pkgsX86.pkgsi686Linux.mesa;
+            steam-x86-mesa64 = pkgsX86.mesa;
           };
 
           packages.steam-arm64 = pkgs.callPackage ./launcher.nix {
@@ -132,9 +134,9 @@
           checks.steam-x86-really-x86 =
             pkgs.runCommand "steam-x86-really-x86" { nativeBuildInputs = [ pkgs.file ]; }
               ''
-                shell=$(head -1 ${pkgsX86.steam}/bin/steam | sed 's|^#!||')
-                grep -q x86-64 <<<"$(file -bL "$shell")"
                 grep -q x86-64 <<<"$(file -bL ${pkgsX86.bashInteractive}/bin/bash)"
+                grep -q x86-64 <<<"$(file -bL ${pkgsX86.mesa}/lib/dri/swrast_dri.so)"
+                grep -q i386 <<<"$(file -bL ${pkgsX86.pkgsi686Linux.mesa}/lib/dri/swrast_dri.so)"
                 touch "$out"
               '';
 
