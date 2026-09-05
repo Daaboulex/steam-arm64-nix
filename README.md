@@ -53,6 +53,17 @@ nix build .#packages.aarch64-linux.default
 nix flake check
 ```
 
+Guest output is lost whenever the launcher's own stdout is not a terminal,
+because muvm attaches the guest's streams to the terminal it was started from. A
+plain redirect keeps muvm's own first line and drops everything the guest says,
+which reads as a program that never ran. Capture through a pty instead. Any
+`FEX_` variable set on the same command reaches the translator, a namespace muvm
+forwards none of.
+
+```bash
+script -q -c "nix run .#steam-x86" steam-x86.log
+```
+
 ## Updates
 
 `scripts/update.sh [publicbeta|stable]` regenerates `client-sources.nix` from
