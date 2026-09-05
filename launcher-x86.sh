@@ -4,38 +4,32 @@ set -o nounset
 set -o pipefail
 
 # Valve's x86 client, run the way Fedora Asahi runs it: FEX translating x86
-# inside muvm's 4K-page guest. Nothing here reads the host's binfmt, so it
-# behaves the same whether or not the machine registers one.
+# against a self-contained x86 rootfs, inside muvm's 4K-page guest. The rootfs
+# and its overlays are the package's own erofs images, stacked by muvm, so the
+# client's whole userland is supplied here and none is borrowed from the host.
 #
-# muvm registers FEX as the guest's own binfmt handler and looks for
-# FEXInterpreter on PATH to do it. Without that the client starts and its x86
-# children do not.
+# The base rootfs is a minimal x86 GL rootfs and carries no coreutils, so the
+# coreutils overlay adds the id, true, cp, readlink Valve's launcher and its
+# pressure-vessel bwrap need; the mesa overlays add the x86 Mesa that reports
+# the GPU. FEX redirects the guest's filesystem into the stacked rootfs, even
+# inside pressure-vessel's own sandbox, which is why these tools resolve there.
 #
-# The client goes through steam-run rather than the steam wrapper, because that
-# wrapper's profile exports LIBGL_DRIVERS_PATH unconditionally at the NixOS
-# driver paths, which on this machine hold aarch64 objects an x86 client cannot
-# load. A command steam-run is given runs after that profile, so the paths named
-# here are the ones that survive.
+# The Mesa overlay keeps its GL drivers under ovl_dri and its glvnd vendor under
+# ovl_egl_vendor.d, off the base rootfs's own search paths, so LIBGL_DRIVERS_PATH
+# and the vendor directory are named for the client to find them.
 #
-# Mesa is named twice, once as a library path and once as a driver path, because
-# libglvnd resolves a GLX vendor before it ever reads a driver path: it dlopens
-# libGLX_mesa.so.0, falls back to libGLX_indirect.so.0, and with neither present
-# glXChooseVisual returns NULL having said nothing about drivers. steam-run's
-# filesystem carries glvnd's dispatch libraries and no vendor at all, because an
-# x86 NixOS host supplies the vendor from its own driver directory, which here
-# holds aarch64 objects. Both word sizes are named on both paths; the loader
-# passes over the one that does not match the process.
-#
-# Rendering is software because the driver for this GPU is aarch64, so a
-# translated x86 client has no hardware path to it.
+# PATH names the rootfs's own bin first so every tool resolves to the x86 rootfs
+# under FEX, then the host's for the few the minimal rootfs omits.
+guest_env=(
+  -e "FEX_ROOTFS=/run/fex-emu/rootfs"
+  -e "LIBGL_DRIVERS_PATH=/usr/lib/ovl_dri:/usr/lib32/ovl_dri"
+  -e "__EGL_VENDOR_LIBRARY_DIRS=/usr/share/glvnd/ovl_egl_vendor.d"
+  -e "PATH=@fexbin@:/usr/bin:/bin:/usr/sbin:/sbin:/run/current-system/sw/bin"
+)
 
-# Diagnostics are carried in when the caller sets them, because a fault this
-# deep is only legible from the layer that met it: LIBGL_DEBUG and MESA_DEBUG
-# for the GL stack, STEAM_RUNTIME to take Valve's own library substitution out
-# of the picture, and every FEX_ variable for the translator itself, which muvm
-# forwards none of.
-guest_env=(-e "PATH=@fexbin@:/run/current-system/sw/bin")
-
+# Diagnostics are carried in when the caller sets them: the GL variables, the
+# runtime switch, and every FEX_ variable for the translator, which muvm
+# forwards none of on its own.
 carry() {
   local name
   for name; do
@@ -49,14 +43,12 @@ carry LIBGL_DEBUG MESA_DEBUG STEAM_RUNTIME
 carry $(env | sed -n 's/^\(FEX_[A-Z0-9_]*\)=.*/\1/p')
 
 exec "@muvm@" \
+  -f "@rootfs@" \
+  -f "@coreutils@" \
+  -f "@mesaI386@" \
+  -f "@mesaX8664@" \
   --gpu-mode=drm \
   --interactive \
   "${guest_env[@]}" \
   -- \
-  "@fexinterpreter@" "@shell@" "@steamrun@" /bin/bash -c '
-    export LD_LIBRARY_PATH="@mesa32@/lib:@mesa64@/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    export LIBGL_DRIVERS_PATH="@mesa32@/lib/dri:@mesa64@/lib/dri"
-    export LIBGL_ALWAYS_SOFTWARE=1
-    export GALLIUM_DRIVER=llvmpipe
-    exec "@steam@" "$@"
-  ' steam-x86 "$@"
+  "@fexinterpreter@" /usr/bin/bash "@steam@" "$@"

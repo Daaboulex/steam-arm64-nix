@@ -45,13 +45,19 @@
             inherit (self'.packages) steam-runtime-arm64;
             inherit (self'.packages) libappindicator-gtk2;
           };
+          packages.steam-x86-rootfs = pkgs.callPackage ./fex-rootfs-x86.nix { };
+          packages.steam-x86-coreutils-overlay = pkgs.callPackage ./coreutils-overlay-x86.nix {
+            staticPkgs = pkgsX86.pkgsStatic;
+          };
+          packages.steam-x86-mesa-overlays = pkgs.callPackage ./mesa-overlays-x86.nix { };
           packages.steam-x86 = pkgs.callPackage ./launcher-x86.nix {
             muvm = pkgs.callPackage ./muvm-patched.nix { };
-            steam-x86-run = pkgsX86.steam-run;
+            inherit (self'.packages)
+              steam-x86-rootfs
+              steam-x86-coreutils-overlay
+              steam-x86-mesa-overlays
+              ;
             steam-x86-entry = pkgsX86.steam-unwrapped;
-            steam-x86-shell = pkgsX86.bashInteractive;
-            steam-x86-mesa32 = pkgsX86.pkgsi686Linux.mesa;
-            steam-x86-mesa64 = pkgsX86.mesa;
           };
 
           packages.steam-arm64 = pkgs.callPackage ./launcher.nix {
@@ -134,28 +140,35 @@
           checks.steam-x86-really-x86 =
             pkgs.runCommand "steam-x86-really-x86" { nativeBuildInputs = [ pkgs.file ]; }
               ''
-                grep -q x86-64 <<<"$(file -bL ${pkgsX86.bashInteractive}/bin/bash)"
-                grep -q x86-64 <<<"$(file -bL ${pkgsX86.mesa}/lib/dri/swrast_dri.so)"
-                grep -q i386 <<<"$(file -bL ${pkgsX86.pkgsi686Linux.mesa}/lib/dri/swrast_dri.so)"
+                grep -q x86-64 <<<"$(file -bL ${pkgsX86.pkgsStatic.coreutils}/bin/true)"
                 touch "$out"
               '';
 
-          checks.steam-x86-glx-vendor =
-            pkgs.runCommand "steam-x86-glx-vendor" { nativeBuildInputs = [ pkgs.file ]; }
-              ''
-                raw=$(grep -oE 'LD_LIBRARY_PATH="[^"$]*' \
-                  ${self'.packages.steam-x86}/bin/steam-x86)
-                test -n "$raw"
-                libpath=$(cut -d'"' -f2 <<<"$raw")
-                found=""
-                for dir in $(tr ':' ' ' <<<"$libpath"); do
-                  test -e "$dir/libGLX_mesa.so.0" || continue
-                  found="$found $(file -bL "$dir/libGLX_mesa.so.0")"
-                done
-                grep -q x86-64 <<<"$found"
-                grep -q i386 <<<"$found"
-                touch "$out"
-              '';
+          checks.steam-x86-rootfs-erofs = pkgs.runCommand "steam-x86-rootfs-erofs" { } ''
+            for img in \
+              ${self'.packages.steam-x86-rootfs} \
+              ${self'.packages.steam-x86-coreutils-overlay} \
+              ${self'.packages.steam-x86-mesa-overlays}/mesa-i386.erofs \
+              ${self'.packages.steam-x86-mesa-overlays}/mesa-x86_64.erofs; do
+              test "$(od -An -tx1 -j1024 -N4 "$img" | tr -d ' ')" = "e2e1f5e0" \
+                || { echo "not an EROFS image: $img"; exit 1; }
+            done
+            touch "$out"
+          '';
+
+          checks.steam-x86-launcher-wiring = pkgs.runCommand "steam-x86-launcher-wiring" { } ''
+            l=${self'.packages.steam-x86}/bin/steam-x86
+            grep -q 'FEX_ROOTFS=/run/fex-emu/rootfs' "$l"
+            grep -q '/usr/lib/ovl_dri:/usr/lib32/ovl_dri' "$l"
+            for img in \
+              ${self'.packages.steam-x86-rootfs} \
+              ${self'.packages.steam-x86-coreutils-overlay} \
+              ${self'.packages.steam-x86-mesa-overlays}/mesa-i386.erofs \
+              ${self'.packages.steam-x86-mesa-overlays}/mesa-x86_64.erofs; do
+              grep -q "$img" "$l" || { echo "launcher does not mount $img"; exit 1; }
+            done
+            touch "$out"
+          '';
 
           checks.client-tree = pkgs.runCommand "steam-arm64-client-tree" { } ''
             test -d ${self'.packages.default}/steamrtarm64/libs

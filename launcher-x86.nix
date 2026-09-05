@@ -5,11 +5,10 @@
   makeDesktopItem,
   muvm,
   fex,
-  steam-x86-run,
+  steam-x86-rootfs,
+  steam-x86-coreutils-overlay,
+  steam-x86-mesa-overlays,
   steam-x86-entry,
-  steam-x86-shell,
-  steam-x86-mesa32,
-  steam-x86-mesa64,
 }:
 let
   # FEX decides what it is from argv0, and the package ships no FEXInterpreter,
@@ -33,7 +32,7 @@ in
 runCommand "steam-x86"
   {
     meta = {
-      description = "Valve's x86 Steam client, translated by FEX inside the 4K-page guest, for comparing against the aarch64 client";
+      description = "Valve's x86 Steam client, translated by FEX against a self-contained x86 rootfs inside the 4K-page guest";
       license = lib.licenses.unfree;
       platforms = [ "aarch64-linux" ];
       mainProgram = "steam-x86";
@@ -45,20 +44,20 @@ runCommand "steam-x86"
         muvm = lib.getExe muvm;
         fexinterpreter = "${fexInterpreter}/bin/FEXInterpreter";
         fexbin = "${fexInterpreter}/bin";
-        steamrun = lib.getExe steam-x86-run;
-        mesa32 = "${steam-x86-mesa32}";
-        mesa64 = "${steam-x86-mesa64}";
-        shell = lib.getExe steam-x86-shell;
+        rootfs = "${steam-x86-rootfs}";
+        coreutils = "${steam-x86-coreutils-overlay}";
+        mesaI386 = "${steam-x86-mesa-overlays}/mesa-i386.erofs";
+        mesaX8664 = "${steam-x86-mesa-overlays}/mesa-x86_64.erofs";
         steam = "${steam-x86-entry}/bin/steam";
       }
     } "$out/bin/steam-x86"
 
     test -x ${fexInterpreter}/bin/FEXInterpreter
     test -x ${steam-x86-entry}/bin/steam
-    test -x ${lib.getExe steam-x86-run}
-    test -x ${lib.getExe steam-x86-shell}
-    test -d ${steam-x86-mesa32}/lib/dri
-    test -d ${steam-x86-mesa64}/lib/dri
+    test -s ${steam-x86-rootfs}
+    test -s ${steam-x86-coreutils-overlay}
+    test -s ${steam-x86-mesa-overlays}/mesa-i386.erofs
+    test -s ${steam-x86-mesa-overlays}/mesa-x86_64.erofs
 
     mkdir -p "$out/share"
     cp -r ${desktopItem}/share/applications "$out/share/"
