@@ -29,16 +29,24 @@ set -o pipefail
 # Rendering is software because the driver for this GPU is aarch64, so a
 # translated x86 client has no hardware path to it.
 
-# A few variables are carried in when the caller sets them, because the client
-# fails at window creation and the reason lives in what its GL stack says.
-# LIBGL_DEBUG=verbose names the driver it tries and why it gives up, and
-# STEAM_RUNTIME=0 stops the runtime substituting its own libraries for ours.
+# Diagnostics are carried in when the caller sets them, because a fault this
+# deep is only legible from the layer that met it: LIBGL_DEBUG and MESA_DEBUG
+# for the GL stack, STEAM_RUNTIME to take Valve's own library substitution out
+# of the picture, and every FEX_ variable for the translator itself, which muvm
+# forwards none of.
 guest_env=(-e "PATH=@fexbin@:/run/current-system/sw/bin")
-for var in LIBGL_DEBUG STEAM_RUNTIME MESA_DEBUG LIBGL_ALWAYS_INDIRECT; do
-  if [ -n "${!var:-}" ]; then
-    guest_env+=(-e "$var=${!var}")
-  fi
-done
+
+carry() {
+  local name
+  for name; do
+    if [ -n "${!name:-}" ]; then
+      guest_env+=(-e "$name=${!name}")
+    fi
+  done
+}
+
+carry LIBGL_DEBUG MESA_DEBUG STEAM_RUNTIME
+carry $(env | sed -n 's/^\(FEX_[A-Z0-9_]*\)=.*/\1/p')
 
 exec "@muvm@" \
   --gpu-mode=drm \
