@@ -140,6 +140,23 @@
                 touch "$out"
               '';
 
+          checks.steam-x86-glx-vendor =
+            pkgs.runCommand "steam-x86-glx-vendor" { nativeBuildInputs = [ pkgs.file ]; }
+              ''
+                raw=$(grep -oE 'LD_LIBRARY_PATH="[^"$]*' \
+                  ${self'.packages.steam-x86}/bin/steam-x86)
+                test -n "$raw"
+                libpath=$(cut -d'"' -f2 <<<"$raw")
+                found=""
+                for dir in $(tr ':' ' ' <<<"$libpath"); do
+                  test -e "$dir/libGLX_mesa.so.0" || continue
+                  found="$found $(file -bL "$dir/libGLX_mesa.so.0")"
+                done
+                grep -q x86-64 <<<"$found"
+                grep -q i386 <<<"$found"
+                touch "$out"
+              '';
+
           checks.client-tree = pkgs.runCommand "steam-arm64-client-tree" { } ''
             test -d ${self'.packages.default}/steamrtarm64/libs
             touch "$out"

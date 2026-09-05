@@ -13,11 +13,21 @@ set -o pipefail
 #
 # The client goes through steam-run rather than the steam wrapper, because that
 # wrapper's profile exports LIBGL_DRIVERS_PATH unconditionally at the NixOS
-# driver paths, which on this machine hold aarch64 drivers an x86 client cannot
-# load. A command steam-run is given runs after that profile, so the drivers
-# named here are the ones that survive. They are the software renderer: the
-# Apple GPU driver is aarch64, so an x86 client has no hardware path at all, and
-# glX fails outright rather than degrading.
+# driver paths, which on this machine hold aarch64 objects an x86 client cannot
+# load. A command steam-run is given runs after that profile, so the paths named
+# here are the ones that survive.
+#
+# Mesa is named twice, once as a library path and once as a driver path, because
+# libglvnd resolves a GLX vendor before it ever reads a driver path: it dlopens
+# libGLX_mesa.so.0, falls back to libGLX_indirect.so.0, and with neither present
+# glXChooseVisual returns NULL having said nothing about drivers. steam-run's
+# filesystem carries glvnd's dispatch libraries and no vendor at all, because an
+# x86 NixOS host supplies the vendor from its own driver directory, which here
+# holds aarch64 objects. Both word sizes are named on both paths; the loader
+# passes over the one that does not match the process.
+#
+# Rendering is software because the driver for this GPU is aarch64, so a
+# translated x86 client has no hardware path to it.
 
 # A few variables are carried in when the caller sets them, because the client
 # fails at window creation and the reason lives in what its GL stack says.
@@ -36,6 +46,7 @@ exec "@muvm@" \
   "${guest_env[@]}" \
   -- \
   "@fexinterpreter@" "@shell@" "@steamrun@" /bin/bash -c '
+    export LD_LIBRARY_PATH="@mesa32@/lib:@mesa64@/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     export LIBGL_DRIVERS_PATH="@mesa32@/lib/dri:@mesa64@/lib/dri"
     export LIBGL_ALWAYS_SOFTWARE=1
     export GALLIUM_DRIVER=llvmpipe
