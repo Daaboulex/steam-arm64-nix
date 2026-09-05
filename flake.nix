@@ -25,6 +25,10 @@
       perSystem =
         { system, self', ... }:
         let
+          pkgsX86 = import inputs.nixpkgs {
+            system = "x86_64-linux";
+            config.allowUnfree = true;
+          };
           pkgs = import inputs.nixpkgs {
             inherit system;
             config.allowUnfree = true;
@@ -41,6 +45,12 @@
             inherit (self'.packages) steam-runtime-arm64;
             inherit (self'.packages) libappindicator-gtk2;
           };
+          packages.steam-x86 = pkgs.callPackage ./launcher-x86.nix {
+            muvm = pkgs.callPackage ./muvm-patched.nix { };
+            steam-x86-client = pkgsX86.steam;
+            steam-x86-shell = pkgsX86.bashInteractive;
+          };
+
           packages.steam-arm64 = pkgs.callPackage ./launcher.nix {
             muvm = pkgs.callPackage ./muvm-patched.nix { };
             steam-arm64-client = self'.packages.default;
@@ -117,6 +127,15 @@
             test -f "$rootfs/usr/share/icons/default/cursors/left_ptr"
             touch "$out"
           '';
+
+          checks.steam-x86-really-x86 =
+            pkgs.runCommand "steam-x86-really-x86" { nativeBuildInputs = [ pkgs.file ]; }
+              ''
+                shell=$(head -1 ${pkgsX86.steam}/bin/steam | sed 's|^#!||')
+                grep -q x86-64 <<<"$(file -bL "$shell")"
+                grep -q x86-64 <<<"$(file -bL ${pkgsX86.bashInteractive}/bin/bash)"
+                touch "$out"
+              '';
 
           checks.client-tree = pkgs.runCommand "steam-arm64-client-tree" { } ''
             test -d ${self'.packages.default}/steamrtarm64/libs
