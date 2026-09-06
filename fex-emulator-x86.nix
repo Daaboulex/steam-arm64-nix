@@ -27,6 +27,15 @@ let
       ];
     };
   };
+  webhelperConfig = builtins.toJSON {
+    Comment = "GLX direct via xcb; Multiblock off to dodge the intermittent web-helper crash (FEX 5336)";
+    ThunksDB = {
+      GL = 0;
+    };
+    Config = {
+      Multiblock = "0";
+    };
+  };
 in
 runCommand "fex-emulator-x86"
   {
@@ -34,7 +43,7 @@ runCommand "fex-emulator-x86"
       patchelf
       glibc.bin
     ];
-    inherit manifest;
+    inherit manifest webhelperConfig;
   }
   ''
     mkdir -p "$out/bin" "$out/lib"
@@ -75,6 +84,8 @@ runCommand "fex-emulator-x86"
       patchelf --set-rpath "$out/lib" "$l" 2>/dev/null || true
     done
 
+    mkdir -p "$out/share/fex-emu/AppConfig"
+    printf '%s' "$webhelperConfig" > "$out/share/fex-emu/AppConfig/steamwebhelper.json"
     printf '%s' "$manifest" > "$out/emulator.json"
     true
   ''

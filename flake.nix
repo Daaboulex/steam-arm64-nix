@@ -25,10 +25,6 @@
       perSystem =
         { system, self', ... }:
         let
-          pkgsX86 = import inputs.nixpkgs {
-            system = "x86_64-linux";
-            config.allowUnfree = true;
-          };
           pkgs = import inputs.nixpkgs {
             inherit system;
             config.allowUnfree = true;
@@ -48,7 +44,7 @@
           packages.steam-x86-rootfs = pkgs.callPackage ./fex-rootfs-x86.nix { };
           packages.fex-emulator-x86 = pkgs.callPackage ./fex-emulator-x86.nix { };
           packages.steam-x86-fhs = pkgs.callPackage ./fhs-x86.nix {
-            steam-x86-entry = pkgsX86.steam-unwrapped;
+            steam-x86-entry = pkgs.steam-unwrapped;
           };
           packages.steam-x86 = pkgs.callPackage ./launcher-x86.nix {
             muvm = pkgs.callPackage ./muvm-patched.nix { };
@@ -160,6 +156,20 @@
                 esac
                 touch "$out"
               '';
+
+          checks.fex-multiblock-divergence = pkgs.runCommand "fex-multiblock-divergence" { } ''
+            case "${pkgs.fex.version}" in
+            2608*) touch "$out" ;;
+            *)
+              echo "FEX is at ${pkgs.fex.version}, past 2608. PR #5856 (the dynamic L1"
+              echo "cache fix behind FEX issue #5336) landed after 2608, so a newer FEX"
+              echo "may make the web-helper Multiblock:0 workaround unnecessary. Re-test"
+              echo "the web helper without it, then drop the Config.Multiblock block in"
+              echo "fex-emulator-x86.nix and this check if it stays stable."
+              exit 1
+              ;;
+            esac
+          '';
 
           checks.steam-x86-fhs-coreutils = pkgs.runCommand "steam-x86-fhs-coreutils" { } ''
             rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-x86-fhs-fhsenv-rootfs' \
