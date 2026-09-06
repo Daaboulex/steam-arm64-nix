@@ -27,7 +27,6 @@ guest_env=(
   -e "PRESSURE_VESSEL_EMULATOR=@emulator@"
   -e "PATH=@fexbin@:@fexsuite@:/usr/bin:/bin:/usr/sbin:/sbin:/run/current-system/sw/bin"
   -e "DISPLAY=${DISPLAY:-:0}"
-  -e "FEX_ENABLECODECACHINGWIP=1"
   -e "MESA_SHADER_CACHE_MAX_SIZE=50G"
 )
 for var in XAUTHORITY XCURSOR_THEME XCURSOR_SIZE DBUS_SESSION_BUS_ADDRESS; do

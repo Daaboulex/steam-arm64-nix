@@ -49,7 +49,6 @@ fi
 # muvm gives the guest its own environment, so what it must inherit is named here.
 guest_env=(
   -e "STEAM_ARM64_ROOT=$steam_root"
-  -e "FEX_ENABLECODECACHINGWIP=1"
   -e "MESA_SHADER_CACHE_MAX_SIZE=50G"
 )
 for var in XCURSOR_THEME XCURSOR_SIZE DBUS_SESSION_BUS_ADDRESS; do
