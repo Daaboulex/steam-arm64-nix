@@ -81,6 +81,7 @@
               cd src
               patch -p1 <${./muvm-mask-mit-shm.patch}
               patch -p1 <${./muvm-bridge-dbus.patch}
+              patch -p1 <${./muvm-vm-tuning.patch}
               touch "$out"
             '';
 
