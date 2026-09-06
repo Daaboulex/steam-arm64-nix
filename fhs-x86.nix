@@ -17,6 +17,7 @@ let
       replaceVars ./guest-run-x86.sh {
         fexinterpreter = "${fexInterpreter}/bin/FEXInterpreter";
         steam = "${steam-x86-entry}/bin/steam";
+        dbusConf = "${./session-bus.conf}";
       }
     } "$out"
   '';
