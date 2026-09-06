@@ -22,8 +22,11 @@ own client manifest.
 
 ## What Is This?
 
-The client only: no emulation layer, no Proton, no game runtime. The binaries
-are aarch64 and run natively; x86 game code still needs FEX and a microVM.
+Two clients. `steam-arm64` is Valve's native aarch64 client: no emulation layer,
+it runs natively, and x86 game code still goes through FEX and a microVM.
+`steam-x86` is Valve's x86_64 client itself, translated by FEX inside the 4K-page
+microVM, in the FHS layout pressure-vessel needs so its webhelper renders. Both
+run x86 Windows games through the same Proton-ARM64 + FEX path.
 
 ## Installation
 
@@ -59,6 +62,14 @@ plain redirect keeps muvm's own first line and drops everything the guest says,
 which reads as a program that never ran. Capture through a pty instead. Any
 `FEX_` variable set on the same command reaches the translator, a namespace muvm
 forwards none of.
+
+To test the native aarch64 client:
+
+```bash
+script -q -c "nix run .#steam-arm64" steam-arm64.log
+```
+
+To test the x86_64 client, translated by FEX inside the microVM:
 
 ```bash
 script -q -c "nix run .#steam-x86" steam-x86.log

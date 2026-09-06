@@ -46,18 +46,17 @@
             inherit (self'.packages) libappindicator-gtk2;
           };
           packages.steam-x86-rootfs = pkgs.callPackage ./fex-rootfs-x86.nix { };
-          packages.steam-x86-coreutils-overlay = pkgs.callPackage ./coreutils-overlay-x86.nix {
-            staticPkgs = pkgsX86.pkgsStatic;
+          packages.fex-emulator-x86 = pkgs.callPackage ./fex-emulator-x86.nix { };
+          packages.steam-x86-fhs = pkgs.callPackage ./fhs-x86.nix {
+            steam-x86-entry = pkgsX86.steam-unwrapped;
           };
-          packages.steam-x86-mesa-overlays = pkgs.callPackage ./mesa-overlays-x86.nix { };
           packages.steam-x86 = pkgs.callPackage ./launcher-x86.nix {
             muvm = pkgs.callPackage ./muvm-patched.nix { };
             inherit (self'.packages)
               steam-x86-rootfs
-              steam-x86-coreutils-overlay
-              steam-x86-mesa-overlays
+              steam-x86-fhs
+              fex-emulator-x86
               ;
-            steam-x86-entry = pkgsX86.steam-unwrapped;
           };
 
           packages.steam-arm64 = pkgs.callPackage ./launcher.nix {
@@ -137,36 +136,69 @@
             touch "$out"
           '';
 
-          checks.steam-x86-really-x86 =
-            pkgs.runCommand "steam-x86-really-x86" { nativeBuildInputs = [ pkgs.file ]; }
+          checks.fex-emulator-x86-self-contained =
+            pkgs.runCommand "fex-emulator-x86-self-contained" { nativeBuildInputs = [ pkgs.patchelf ]; }
               ''
-                grep -q x86-64 <<<"$(file -bL ${pkgsX86.pkgsStatic.coreutils}/bin/true)"
+                b=${self'.packages.fex-emulator-x86}
+                test -f "$b/emulator.json"
+                interp=$(patchelf --print-interpreter "$b/bin/FEX")
+                case "$interp" in
+                "$b/lib/"*) ;;
+                *)
+                  echo "FEX interpreter escapes the bundle: $interp"
+                  exit 1
+                  ;;
+                esac
+                rpath=$(patchelf --print-rpath "$b/bin/FEX")
+                case "$rpath" in
+                "$b/lib"*) ;;
+                *)
+                  echo "FEX rpath escapes the bundle: $rpath"
+                  exit 1
+                  ;;
+                esac
                 touch "$out"
               '';
 
+          checks.steam-x86-fhs-coreutils = pkgs.runCommand "steam-x86-fhs-coreutils" { } ''
+            rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-x86-fhs-fhsenv-rootfs' \
+              ${self'.packages.steam-x86-fhs}/bin/steam-x86-fhs | head -1)
+            test -n "$rootfs"
+            test -e "$rootfs/usr/bin/true"
+            touch "$out"
+          '';
+
           checks.steam-x86-rootfs-erofs = pkgs.runCommand "steam-x86-rootfs-erofs" { } ''
-            for img in \
-              ${self'.packages.steam-x86-rootfs} \
-              ${self'.packages.steam-x86-coreutils-overlay} \
-              ${self'.packages.steam-x86-mesa-overlays}/mesa-i386.erofs \
-              ${self'.packages.steam-x86-mesa-overlays}/mesa-x86_64.erofs; do
-              test "$(od -An -tx1 -j1024 -N4 "$img" | tr -d ' ')" = "e2e1f5e0" \
-                || { echo "not an EROFS image: $img"; exit 1; }
-            done
+            test "$(od -An -tx1 -j1024 -N4 ${self'.packages.steam-x86-rootfs} | tr -d ' ')" = "e2e1f5e0" \
+              || {
+                echo "not an EROFS image: ${self'.packages.steam-x86-rootfs}"
+                exit 1
+              }
             touch "$out"
           '';
 
           checks.steam-x86-launcher-wiring = pkgs.runCommand "steam-x86-launcher-wiring" { } ''
             l=${self'.packages.steam-x86}/bin/steam-x86
-            grep -q 'FEX_ROOTFS=/run/fex-emu/rootfs' "$l"
-            grep -q '/usr/lib/ovl_dri:/usr/lib32/ovl_dri' "$l"
-            for img in \
-              ${self'.packages.steam-x86-rootfs} \
-              ${self'.packages.steam-x86-coreutils-overlay} \
-              ${self'.packages.steam-x86-mesa-overlays}/mesa-i386.erofs \
-              ${self'.packages.steam-x86-mesa-overlays}/mesa-x86_64.erofs; do
-              grep -q "$img" "$l" || { echo "launcher does not mount $img"; exit 1; }
-            done
+            grep -q '${self'.packages.fex-emulator-x86}/emulator.json' "$l" \
+              || {
+                echo "launcher does not set the emulator descriptor"
+                exit 1
+              }
+            grep -q '${self'.packages.steam-x86-rootfs}' "$l" \
+              || {
+                echo "launcher does not mount the rootfs"
+                exit 1
+              }
+            grep -q '${self'.packages.steam-x86-fhs}/bin/steam-x86-fhs' "$l" \
+              || {
+                echo "launcher does not enter the FHS"
+                exit 1
+              }
+            grep -q 'FEX_ROOTFS=/run/fex-emu/rootfs' ${./guest-run-x86.sh} \
+              || {
+                echo "guest-run does not set FEX_ROOTFS"
+                exit 1
+              }
             touch "$out"
           '';
 
