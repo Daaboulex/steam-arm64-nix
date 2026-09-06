@@ -171,6 +171,21 @@
             esac
           '';
 
+          checks.fex-launcher-env = pkgs.runCommand "fex-launcher-env" { } ''
+            known=$(grep -aoE 'FEX_[A-Z0-9_]+' ${pkgs.fex}/bin/FEX | sort -u)
+            status=0
+            for f in ${./launcher.sh} ${./launcher-x86.sh} ${./guest-run-x86.sh}; do
+              for v in $(grep -aoE 'FEX_[A-Z0-9_]+' "$f" | sort -u); do
+                if ! grep -qxF "$v" <<<"$known"; then
+                  echo "$v is set by a launcher but FEX ${pkgs.fex.version} does not name it (a silent no-op)"
+                  status=1
+                fi
+              done
+            done
+            if [ "$status" -ne 0 ]; then exit 1; fi
+            touch "$out"
+          '';
+
           checks.steam-x86-fhs-coreutils = pkgs.runCommand "steam-x86-fhs-coreutils" { } ''
             rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-x86-fhs-fhsenv-rootfs' \
               ${self'.packages.steam-x86-fhs}/bin/steam-x86-fhs | head -1)
