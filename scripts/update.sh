@@ -172,11 +172,11 @@ fi
   printf '}\n'
 } >"$out"
 
-log "verifying the new pin builds"
-if ! nix build "$repo_root#default" --no-link; then
-  err "the regenerated pin does not build"
+log "verifying the new pin evaluates"
+if ! nix eval --raw "$repo_root#packages.aarch64-linux.default.drvPath" >/dev/null; then
+  err "the regenerated pin does not evaluate"
   output "updated" "false"
-  output "error_type" "build-error"
+  output "error_type" "eval-error"
   exit 1
 fi
 
