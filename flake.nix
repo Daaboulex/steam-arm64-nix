@@ -228,15 +228,24 @@
             touch "$out"
           '';
 
-          checks.steam-x86-guest-socat = pkgs.runCommand "steam-x86-guest-socat" { } ''
-            grep -q 'PATH=[^"]*${pkgs.socat}/bin' ${self'.packages.steam-x86}/bin/steam-x86 \
-              || {
-                echo "the x86 launcher overrides the guest PATH without socat on it."
-                echo "muvm builds its pulse and session-bus proxies by running socat, and"
-                echo "setup_socket_proxy returns Ok without a word when socat is absent, so"
-                echo "the guest gets no bridge and the tray falls back to a menuless XEmbed icon."
-                exit 1
-              }
+          checks.muvm-guest-path-socat = pkgs.runCommand "muvm-guest-path-socat" { } ''
+            status=0
+            for l in ${self'.packages.steam-arm64}/bin/steam-arm64 \
+              ${self'.packages.steam-x86}/bin/steam-x86; do
+              if grep -q '"PATH=' "$l" && ! grep -q '${pkgs.socat}/bin' "$l"; then
+                echo "$l hands the guest a PATH with no socat on it."
+                status=1
+              fi
+            done
+            if [ "$status" -ne 0 ]; then
+              echo "muvm builds its pulse and session bus proxies by running socat, and"
+              echo "setup_socket_proxy returns Ok without a word when socat is absent from"
+              echo "the PATH the guest inherits, so the guest gets no bridge at all and the"
+              echo "tray falls back to an XEmbed icon with no name and no menu. Either leave"
+              echo "the guest PATH alone, as the arm64 launcher does, or put socat on the"
+              echo "one you set."
+              exit 1
+            fi
             touch "$out"
           '';
 
