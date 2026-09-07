@@ -228,6 +228,18 @@
             touch "$out"
           '';
 
+          checks.steam-x86-guest-socat = pkgs.runCommand "steam-x86-guest-socat" { } ''
+            grep -q 'PATH=[^"]*${pkgs.socat}/bin' ${self'.packages.steam-x86}/bin/steam-x86 \
+              || {
+                echo "the x86 launcher overrides the guest PATH without socat on it."
+                echo "muvm builds its pulse and session-bus proxies by running socat, and"
+                echo "setup_socket_proxy returns Ok without a word when socat is absent, so"
+                echo "the guest gets no bridge and the tray falls back to a menuless XEmbed icon."
+                exit 1
+              }
+            touch "$out"
+          '';
+
           checks.client-tree = pkgs.runCommand "steam-arm64-client-tree" { } ''
             test -d ${self'.packages.default}/steamrtarm64/libs
             touch "$out"

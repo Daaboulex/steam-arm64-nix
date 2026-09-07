@@ -7,6 +7,7 @@
   makeDesktopItem,
   xrdb,
   muvm,
+  socat,
   fex,
   steam-x86-fhs,
   steam-x86-rootfs,
@@ -52,6 +53,7 @@ runCommand "steam-x86"
         xrdb = lib.getExe' xrdb "xrdb";
         fexbin = "${fexInterpreter}/bin";
         fexsuite = "${fex}/bin";
+        socatbin = "${socat}/bin";
         rootfs = "${steam-x86-rootfs}";
         emulator = "${fex-emulator-x86}/emulator.json";
         fhs = "${steam-x86-fhs}";

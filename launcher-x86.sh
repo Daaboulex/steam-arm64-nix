@@ -25,7 +25,7 @@ fi
 
 guest_env=(
   -e "PRESSURE_VESSEL_EMULATOR=@emulator@"
-  -e "PATH=@fexbin@:@fexsuite@:/usr/bin:/bin:/usr/sbin:/sbin:/run/current-system/sw/bin"
+  -e "PATH=@fexbin@:@fexsuite@:@socatbin@:/usr/bin:/bin:/usr/sbin:/sbin"
   -e "DISPLAY=${DISPLAY:-:0}"
   -e "MESA_SHADER_CACHE_MAX_SIZE=50G"
 )
