@@ -160,6 +160,20 @@
                 touch "$out"
               '';
 
+          checks.remote-play-ports-published = pkgs.runCommand "steam-remote-play-ports-published" { } ''
+            for l in ${./launcher.sh} ${./launcher-x86.sh}; do
+              for p in 27031:27031/udp 27036:27036/udp 27036:27036 27037:27037; do
+                if ! grep -q -- "-p $p" "$l"; then
+                  echo "$l no longer publishes $p: passt cannot carry the guest's own LAN"
+                  echo "broadcast, so a Steam Link or Remote Play client on the LAN finds this"
+                  echo "client only through the published discovery and stream ports"
+                  exit 1
+                fi
+              done
+            done
+            touch "$out"
+          '';
+
           checks.helper-crc-matches =
             pkgs.runCommand "steam-helper-crc-matches" { nativeBuildInputs = [ pkgs.python3 ]; }
               ''

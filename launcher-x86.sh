@@ -52,6 +52,10 @@ fi
 exec "@muvm@" \
   -f "@rootfs@" \
   --gpu-mode=drm \
+  -p 27031:27031/udp \
+  -p 27036:27036/udp \
+  -p 27036:27036 \
+  -p 27037:27037 \
   --interactive \
   "${guest_env[@]}" \
   -- \
