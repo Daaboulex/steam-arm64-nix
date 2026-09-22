@@ -90,11 +90,11 @@ shape code. It needs the x86 client installed in the same Steam root, which
 `steam-x86` does on its first run. The UI then renders through FEX, the way the
 whole x86 client does.
 
-Valve's client checks file sizes on a normal start, which the padding
-satisfies. After an unclean shutdown it checks CRCs instead, reinstalls its own
-package over the swap, restarts, and the launcher applies the swap again; that
-start takes about a minute longer. Quitting the client cleanly keeps the next
-start on the size check.
+Valve's client checks file sizes on a normal start and CRCs after an unclean
+one; a mismatch makes it reinstall its own package and restart. The swap is
+therefore padded to Valve's size and carries Valve's CRC in eight printable
+bytes after its marker line, chosen by `helper-crc.py` inside the sandbox on
+every start, so both checks pass and the client starts at once.
 
 Both clients open windows of class `steam`, so only the native client's desktop
 entry claims that class and the `steam://` scheme; a second claim would make

@@ -159,6 +159,33 @@
                 touch "$out"
               '';
 
+          checks.helper-crc-matches =
+            pkgs.runCommand "steam-helper-crc-matches" { nativeBuildInputs = [ pkgs.python3 ]; }
+              ''
+                python3 - <<'EOF'
+                pristine = (bytes(range(256)) * 2)[:398]
+                open("pristine", "wb").write(pristine)
+                swap = b"#!/bin/bash\n# the marker 00000000\nexec x\n"
+                open("helper", "wb").write(swap + b" " * (len(pristine) - len(swap)))
+                EOF
+                python3 ${./helper-crc.py} match helper pristine "the marker"
+                python3 ${./helper-crc.py} verify helper pristine
+                python3 - <<'EOF'
+                import zlib
+                a = open("helper", "rb").read()
+                b = open("pristine", "rb").read()
+                assert len(a) == len(b) and zlib.crc32(a) == zlib.crc32(b)
+                slot = a[a.index(b"the marker ") + 11 :][:8]
+                assert all(0x20 <= c < 0x7F for c in slot), slot
+                EOF
+                printf x >>helper
+                if python3 ${./helper-crc.py} verify helper pristine; then
+                  echo "verify accepted a helper that no longer matches Valve's script"
+                  exit 1
+                fi
+                touch "$out"
+              '';
+
           checks.helper-swap-heals = pkgs.runCommand "steam-helper-swap-heals" { } ''
             grep -q 'XShapeQueryExtension' ${./guest-run.sh} \
               || {

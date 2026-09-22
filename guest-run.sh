@@ -62,8 +62,9 @@ fi
 # manager: no drag, no resize. The x86 helper carves it, so the client gets
 # that helper, run by FEX in this guest, until the aarch64 helper carries the
 # shape code itself, which is what the grep on its binary waits for. Valve's
-# file check compares sizes, so the swap is padded to the size of the script
-# it replaces, and that script is kept beside it.
+# file check compares sizes, and CRCs after an unclean quit, so the swap is
+# padded to the size of the script it replaces and carries that script's CRC
+# in the slot after the marker; the script itself is kept beside it.
 helper_dir="$steam_root/steamrtarm64"
 helper="$helper_dir/steamwebhelper.sh"
 pristine="$helper_dir/steamwebhelper.sh.valve"
@@ -80,14 +81,18 @@ elif [ -f "$helper" ]; then
   if ! grep -q "$marker" "$helper"; then
     cp -p -- "$helper" "$pristine"
   fi
-  swap=$(printf '#!/bin/bash\n# %s\nexport FEX_ROOTFS=/run/fex-emu/rootfs\nunset LIBGL_DRIVERS_PATH __EGL_VENDOR_LIBRARY_DIRS LIBVA_DRIVERS_PATH VDPAU_DRIVER_PATH VK_DRIVER_FILES\nexec FEXInterpreter %s "$@" --disable-gpu --disable-gpu-compositing' "$marker" "$x86_helper")
+  swap=$(printf '#!/bin/bash\n# %s 00000000\nexport FEX_ROOTFS=/run/fex-emu/rootfs\nunset LIBGL_DRIVERS_PATH __EGL_VENDOR_LIBRARY_DIRS LIBVA_DRIVERS_PATH VDPAU_DRIVER_PATH VK_DRIVER_FILES\nexec FEXInterpreter %s "$@" --disable-gpu --disable-gpu-compositing' "$marker" "$x86_helper")
   size=$(stat -c %s -- "$pristine")
   pad=$((size - ${#swap} - 1))
   if [ "$pad" -lt 0 ]; then
     echo "steam-arm64: Valve's web helper script is shorter than the swap, so the client keeps Valve's aarch64 web helper" >&2
     cp -p -- "$pristine" "$helper"
-  elif ! grep -q "$marker" "$helper" || [ "$(stat -c %s -- "$helper")" -ne "$size" ]; then
+  elif ! grep -q "$marker" "$helper" || ! python3 @helperCrc@ verify "$helper" "$pristine"; then
     printf '%s%*s\n' "$swap" "$pad" '' >"$helper"
+    if ! python3 @helperCrc@ match "$helper" "$pristine" "$marker"; then
+      echo "steam-arm64: the swap could not be given Valve's CRC, so the client keeps Valve's aarch64 web helper" >&2
+      cp -p -- "$pristine" "$helper"
+    fi
   fi
 fi
 
@@ -121,6 +126,7 @@ if [ "${1:-}" = "--doctor" ]; then
   check "Steam Linux Runtime 4.0 arm64 installed (app 4185400)" test -x "$tools/SteamLinuxRuntime_4-arm64/pressure-vessel/bin/pressure-vessel-wrap"
   check "Proton (ARM64) installed" sh -c 'ls -d "$1"/Proton*ARM64*/proton >/dev/null 2>&1' sh "$tools"
   check "web helper can move and resize the window (x86 helper, or a fixed aarch64 one)" sh -c 'if ! grep -q "$1" "$2"; then grep -q XShapeQueryExtension "$3"; fi' sh "$marker" "$helper" "$helper_dir/steamwebhelper"
+  check "web helper swap passes Valve's size and CRC check, or is not in place" sh -c 'if grep -q "$1" "$2"; then python3 "$4" verify "$2" "$3"; fi' sh "$marker" "$helper" "$pristine" @helperCrc@
   if [ -n "${STEAM_EXTRA_COMPAT_TOOLS_PATHS:-}" ]; then
     for dir in ${STEAM_EXTRA_COMPAT_TOOLS_PATHS//:/ }; do
       check "extra tool ${dir##*/} complete" test -f "$dir/toolmanifest.vdf" -a -f "$dir/compatibilitytool.vdf" -a -x "$dir/proton"
