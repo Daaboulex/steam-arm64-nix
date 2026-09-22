@@ -58,7 +58,7 @@
           packages.steam-arm64 = pkgs.callPackage ./launcher.nix {
             muvm = pkgs.callPackage ./muvm-patched.nix { };
             steam-arm64-client = self'.packages.default;
-            inherit (self'.packages) steam-arm64-fhs;
+            inherit (self'.packages) steam-arm64-fhs steam-x86-rootfs;
           };
 
           pre-commit.settings.hooks = {
@@ -139,6 +139,35 @@
               echo "X server's built-in bitmap, 10x16 pixels whatever the display scale."
               exit 1
             fi
+            touch "$out"
+          '';
+
+          checks.steam-arm64-x86-games-wiring = pkgs.runCommand "steam-arm64-x86-games-wiring" { } ''
+            l=${self'.packages.steam-arm64}/bin/steam-arm64
+            grep -q -- '-f "${self'.packages.steam-x86-rootfs}"' "$l" \
+              || {
+                echo "the native client's guest has no FEX rootfs, so no graphics provider"
+                exit 1
+              }
+            grep -q 'STEAM_COMPAT_GRAPHICS_PROVIDER=/run/fex-emu/rootfs/graphics_provider.json' "$l" \
+              || {
+                echo "the native client does not name the graphics provider for Valve's FEX tool"
+                exit 1
+              }
+            grep -q 'export PATH="/nix/store/[a-z0-9]*-fex-interpreter/bin:' "$l" \
+              || {
+                echo "the guest's PATH carries no FEXInterpreter, so muvm registers no x86 binfmt"
+                exit 1
+              }
+            rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-arm64-fhs-fhsenv-rootfs' \
+              ${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs | head -1)
+            test -n "$rootfs"
+            test -x "$rootfs/usr/bin/python3" \
+              || {
+                echo "Valve's fex-compat-tool is a python3 script run outside the container;"
+                echo "without python3 in the FHS every x86 tool and game exits at once"
+                exit 1
+              }
             touch "$out"
           '';
 
@@ -271,6 +300,7 @@
         steam-arm64-client = final.callPackage ./package.nix { };
         steam-runtime-arm64 = final.callPackage ./runtime.nix { };
         steam-arm64-fhs = final.callPackage ./fhs.nix { };
+        steam-x86-rootfs = final.callPackage ./fex-rootfs-x86.nix { };
         steam-arm64 = final.callPackage ./launcher.nix { };
       };
     };

@@ -22,11 +22,13 @@ own client manifest.
 
 ## What Is This?
 
-Two clients. `steam-arm64` is Valve's native aarch64 client: no emulation layer,
-it runs natively, and x86 game code still goes through FEX and a microVM.
-`steam-x86` is Valve's x86_64 client itself, translated by FEX inside the 4K-page
-microVM, in the FHS layout pressure-vessel needs so its webhelper renders. Both
-run x86 Windows games through the same Proton-ARM64 + FEX path.
+Two clients. `steam-arm64` is Valve's native aarch64 client, run inside the
+4K-page microVM its binaries need. Windows games go through Valve's Proton
+(ARM64), Wine built as ARM64EC with FEX inside it; x86 Linux games and x86
+Proton go through Valve's own FEX compatibility tool, which the client
+downloads, and which takes its x86 Mesa from the FEX rootfs the launcher mounts.
+`steam-x86` is Valve's x86_64 client itself, translated by FEX inside the same
+microVM, in the FHS layout pressure-vessel needs so its webhelper renders.
 
 ## Installation
 

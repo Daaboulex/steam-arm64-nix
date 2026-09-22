@@ -51,9 +51,14 @@ if [ -z "${XCURSOR_THEME:-}" ]; then
 fi
 
 # muvm gives the guest its own environment, so what it must inherit is named here.
+# Valve's FEX compatibility tool, which the client puts in front of every x86
+# tool and game, takes its x86 Mesa from the graphics provider named here; the
+# FEX rootfs mounted below carries one, and without it an x86 game inside the
+# container has no driver.
 guest_env=(
   -e "STEAM_ARM64_ROOT=$steam_root"
   -e "MESA_SHADER_CACHE_MAX_SIZE=50G"
+  -e "STEAM_COMPAT_GRAPHICS_PROVIDER=/run/fex-emu/rootfs/graphics_provider.json"
 )
 for var in XCURSOR_THEME XCURSOR_SIZE XCURSOR_PATH DBUS_SESSION_BUS_ADDRESS; do
   if [ -n "${!var:-}" ]; then
@@ -61,11 +66,16 @@ for var in XCURSOR_THEME XCURSOR_SIZE XCURSOR_PATH DBUS_SESSION_BUS_ADDRESS; do
   fi
 done
 
+# muvm registers FEX as the guest's x86 binfmt handler by looking up
+# FEXInterpreter on the PATH it inherits, a name FEX no longer installs.
+export PATH="@fexbin@:$PATH"
+
 # Valve exits 42 to ask for a restart, which is how the client hands control
 # back after it updates itself.
 while :; do
   set +o errexit
   "@muvm@" \
+    -f "@rootfs@" \
     --gpu-mode=drm \
     --interactive \
     "${guest_env[@]}" \

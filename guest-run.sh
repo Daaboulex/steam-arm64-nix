@@ -27,6 +27,13 @@ fi
 
 steam_root="${STEAM_ARM64_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/Steam}"
 
+# muvm keeps one guest per user and a launch into a running guest keeps that
+# guest's mounts, so a guest another command started has no FEX rootfs and the
+# graphics provider named for Valve's FEX tool points at nothing.
+if [ -n "${STEAM_COMPAT_GRAPHICS_PROVIDER:-}" ] && [ ! -f "$STEAM_COMPAT_GRAPHICS_PROVIDER" ]; then
+  echo "steam-arm64: $STEAM_COMPAT_GRAPHICS_PROVIDER is not in this guest; x86 games will not start until the running muvm guest exits and Steam starts one of its own" >&2
+fi
+
 # The guest has no session bus of its own and the client's launcher service
 # exits without one. A bus that will not start must never stop the client, so
 # this is best effort and the client runs either way.

@@ -31,6 +31,7 @@ buildFHSEnv {
       file
       lsb-release
       pciutils
+      python3
       usbutils
       xdg-utils
       xz
