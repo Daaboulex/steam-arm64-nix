@@ -86,6 +86,13 @@ if [ "${1:-}" = "--doctor" ]; then
   check "Valve's FEX tool starts" env STEAM_COMPAT_DATA_PATH=/tmp "$tools/FEX-Emu/fex-compat-tool" --help
   check "Steam Linux Runtime 4.0 arm64 installed (app 4185400)" test -x "$tools/SteamLinuxRuntime_4-arm64/pressure-vessel/bin/pressure-vessel-wrap"
   check "Proton (ARM64) installed" sh -c 'ls -d "$1"/Proton*ARM64*/proton >/dev/null 2>&1' sh "$tools"
+  if [ -n "${STEAM_EXTRA_COMPAT_TOOLS_PATHS:-}" ]; then
+    for dir in ${STEAM_EXTRA_COMPAT_TOOLS_PATHS//:/ }; do
+      check "extra tool ${dir##*/} complete" test -f "$dir/toolmanifest.vdf" -a -f "$dir/compatibilitytool.vdf" -a -x "$dir/proton"
+    done
+  else
+    printf 'none  extra compatibility tools handed in\n'
+  fi
   exit "$status"
 fi
 
