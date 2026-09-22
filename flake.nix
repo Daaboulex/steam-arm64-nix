@@ -142,6 +142,23 @@
             touch "$out"
           '';
 
+          checks.one-entry-owns-the-window-class =
+            pkgs.runCommand "steam-one-entry-owns-the-window-class" { }
+              ''
+                grep -q 'startupWMClass = "steam"' ${./launcher.nix} \
+                  || {
+                    echo "the native client's desktop entry must claim the window class steam"
+                    exit 1
+                  }
+                if grep -q -E 'startupWMClass|mimeTypes' ${./launcher-x86.nix}; then
+                  echo "the x86 client's desktop entry must not claim the window class or the"
+                  echo "steam URL scheme: both clients open windows of class steam, and a second"
+                  echo "claim makes the task manager name the native client's window after it"
+                  exit 1
+                fi
+                touch "$out"
+              '';
+
           checks.helper-swap-heals = pkgs.runCommand "steam-helper-swap-heals" { } ''
             grep -q 'XShapeQueryExtension' ${./guest-run.sh} \
               || {

@@ -96,6 +96,10 @@ package over the swap, restarts, and the launcher applies the swap again; that
 start takes about a minute longer. Quitting the client cleanly keeps the next
 start on the size check.
 
+Both clients open windows of class `steam`, so only the native client's desktop
+entry claims that class and the `steam://` scheme; a second claim would make
+the task manager name either client's window after the x86 entry.
+
 ## Checking the stack
 
 ```bash

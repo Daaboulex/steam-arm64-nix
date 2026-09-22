@@ -28,14 +28,10 @@ let
     name = "steam-x86";
     desktopName = "Steam (x86)";
     genericName = "Game Launcher";
+    comment = "Valve's x86 Steam client, run by FEX inside the 4K-page microVM";
     exec = "steam-x86 %U";
     icon = "steam-x86";
     categories = [ "Game" ];
-    startupWMClass = "steam";
-    mimeTypes = [
-      "x-scheme-handler/steam"
-      "x-scheme-handler/steamlink"
-    ];
   };
 in
 runCommand "steam-x86"

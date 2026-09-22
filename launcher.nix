@@ -29,6 +29,7 @@ let
     name = "steam-arm64";
     desktopName = "Steam";
     genericName = "Game Launcher";
+    comment = "Valve's native aarch64 Steam client";
     exec = "steam-arm64 %U";
     icon = "steam";
     categories = [ "Game" ];
