@@ -77,6 +77,19 @@ To test the x86_64 client, translated by FEX inside the microVM:
 script -q -c "nix run .#steam-x86" steam-x86.log
 ```
 
+## Checking the stack
+
+```bash
+steam-arm64 --doctor
+```
+
+Runs inside the guest and the sandbox the client gets, joining a running
+client or starting a guest of its own, and reports each thing an x86 game
+needs: the 4K page size, the binfmt handler, the FEX rootfs and the graphics
+provider, python3 for Valve's FEX tool, the cursor path, the session bus, and
+the Steam apps the client must have downloaded (FEX, Steam Linux Runtime 4.0
+arm64, a Proton for ARM64).
+
 ## Updates
 
 `scripts/update.sh [publicbeta|stable]` regenerates `client-sources.nix` from

@@ -57,4 +57,36 @@ if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
   fi
 fi
 
+# steam-arm64 --doctor runs here, inside the guest and the sandbox the client
+# gets, and reports each thing an x86 game needs, so the stack can be checked
+# without launching a game.
+if [ "${1:-}" = "--doctor" ]; then
+  status=0
+  check() {
+    name=$1
+    shift
+    if "$@" >/dev/null 2>&1; then
+      printf 'ok    %s\n' "$name"
+    else
+      printf 'FAIL  %s\n' "$name"
+      status=1
+    fi
+  }
+  tools="$steam_root/steamapps/common"
+  check "guest runs on 4K pages" test "$(getconf PAGESIZE)" = 4096
+  check "x86-64 binfmt handler registered in the guest" test -f /proc/sys/fs/binfmt_misc/FEX-x86_64
+  check "FEX rootfs mounted" test -d /run/fex-emu/rootfs/usr/lib64
+  check "graphics provider named and present" test -f "${STEAM_COMPAT_GRAPHICS_PROVIDER:-/nonexistent}"
+  check "an x86-64 binary runs through the rootfs" env FEX_ROOTFS=/run/fex-emu/rootfs /run/fex-emu/rootfs/usr/bin/true
+  check "python3 for Valve's FEX tool" command -v python3
+  check "cursor theme path handed in" test -n "${XCURSOR_PATH:-}"
+  check "session bus answers" dbus-send --session --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames
+  check "launcher service on PATH" command -v steam-runtime-launcher-service
+  check "Valve's FEX tool installed (Steam app 3127680)" test -x "$tools/FEX-Emu/fex-compat-tool"
+  check "Valve's FEX tool starts" env STEAM_COMPAT_DATA_PATH=/tmp "$tools/FEX-Emu/fex-compat-tool" --help
+  check "Steam Linux Runtime 4.0 arm64 installed (app 4185400)" test -x "$tools/SteamLinuxRuntime_4-arm64/pressure-vessel/bin/pressure-vessel-wrap"
+  check "Proton (ARM64) installed" sh -c 'ls -d "$1"/Proton*ARM64*/proton >/dev/null 2>&1' sh "$tools"
+  exit "$status"
+fi
+
 exec "$steam_root/steamrtarm64/steam" "$@"
