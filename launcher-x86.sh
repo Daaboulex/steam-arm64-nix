@@ -29,7 +29,7 @@ guest_env=(
   -e "DISPLAY=${DISPLAY:-:0}"
   -e "MESA_SHADER_CACHE_MAX_SIZE=50G"
 )
-for var in XAUTHORITY XCURSOR_THEME XCURSOR_SIZE DBUS_SESSION_BUS_ADDRESS; do
+for var in XAUTHORITY XCURSOR_THEME XCURSOR_SIZE XCURSOR_PATH DBUS_SESSION_BUS_ADDRESS; do
   if [ -n "${!var:-}" ]; then
     guest_env+=(-e "$var=${!var}")
   fi

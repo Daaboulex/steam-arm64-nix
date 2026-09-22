@@ -25,7 +25,11 @@ fi
 
 # The desktop publishes the cursor it wants in the X resource database, which is
 # where every other X client reads it, so the client follows the desktop rather
-# than carrying a size and a theme name of its own.
+# than carrying a size and a theme name of its own. The directories that hold
+# the theme come from XCURSOR_PATH in the session: the Xcursor library here is
+# built with no system directory of its own, so without it no theme resolves and
+# the client draws the X server's built-in bitmap, which is tiny on a scaled
+# display.
 resources=$("@xrdb@" -query 2>/dev/null || true)
 xresource() {
   printf '%s\n' "$resources" | sed -n "s/^$1:[[:space:]]*\(.*\)\$/\1/p" | head -1
@@ -51,7 +55,7 @@ guest_env=(
   -e "STEAM_ARM64_ROOT=$steam_root"
   -e "MESA_SHADER_CACHE_MAX_SIZE=50G"
 )
-for var in XCURSOR_THEME XCURSOR_SIZE DBUS_SESSION_BUS_ADDRESS; do
+for var in XCURSOR_THEME XCURSOR_SIZE XCURSOR_PATH DBUS_SESSION_BUS_ADDRESS; do
   if [ -n "${!var:-}" ]; then
     guest_env+=(-e "$var=${!var}")
   fi

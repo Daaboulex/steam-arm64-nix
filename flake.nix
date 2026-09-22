@@ -124,12 +124,21 @@
               touch "$out"
             '';
 
-          checks.cursor-theme = pkgs.runCommand "steam-arm64-cursor-theme" { } ''
-            rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-arm64-fhs-fhsenv-rootfs' \
-              ${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs | head -1)
-            test -n "$rootfs"
-            test ! -L "$rootfs/usr/share/icons/default"
-            test -f "$rootfs/usr/share/icons/default/cursors/left_ptr"
+          checks.cursor-path-forwarded = pkgs.runCommand "steam-cursor-path-forwarded" { } ''
+            status=0
+            for l in ${./launcher.sh} ${./launcher-x86.sh}; do
+              if ! grep -q 'XCURSOR_PATH' "$l"; then
+                echo "$l does not hand XCURSOR_PATH to the guest"
+                status=1
+              fi
+            done
+            if [ "$status" -ne 0 ]; then
+              echo "libXcursor here searches only the home directory and its own empty share"
+              echo "directory, so the theme the desktop names resolves in the guest only through"
+              echo "the XCURSOR_PATH the session publishes; without it every lookup falls to the"
+              echo "X server's built-in bitmap, 10x16 pixels whatever the display scale."
+              exit 1
+            fi
             touch "$out"
           '';
 
