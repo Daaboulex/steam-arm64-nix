@@ -90,6 +90,12 @@ shape code. It needs the x86 client installed in the same Steam root, which
 `steam-x86` does on its first run. The UI then renders through FEX, the way the
 whole x86 client does.
 
+Valve's client checks file sizes on a normal start, which the padding
+satisfies. After an unclean shutdown it checks CRCs instead, reinstalls its own
+package over the swap, restarts, and the launcher applies the swap again; that
+start takes about a minute longer. Quitting the client cleanly keeps the next
+start on the size check.
+
 ## Checking the stack
 
 ```bash
