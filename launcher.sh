@@ -60,7 +60,7 @@ guest_env=(
   -e "MESA_SHADER_CACHE_MAX_SIZE=50G"
   -e "STEAM_COMPAT_GRAPHICS_PROVIDER=/run/fex-emu/rootfs/graphics_provider.json"
 )
-for var in XCURSOR_THEME XCURSOR_SIZE XCURSOR_PATH DBUS_SESSION_BUS_ADDRESS STEAM_EXTRA_COMPAT_TOOLS_PATHS; do
+for var in XCURSOR_THEME XCURSOR_SIZE XCURSOR_PATH DBUS_SESSION_BUS_ADDRESS STEAM_EXTRA_COMPAT_TOOLS_PATHS LOCALE_ARCHIVE; do
   if [ -n "${!var:-}" ]; then
     guest_env+=(-e "$var=${!var}")
   fi
