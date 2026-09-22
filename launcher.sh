@@ -81,6 +81,12 @@ fi
 # Valve exits 42 to ask for a restart, which is how the client hands control
 # back after it updates itself.
 while :; do
+  # A guest numbers its processes from one, so the pid file the last client
+  # left names a live process in the next guest and the client exits believing
+  # it is already running. With no guest holding muvm's lock the file is stale.
+  if "@flock@" -n "${XDG_RUNTIME_DIR:?}/muvm.lock" true 2>/dev/null; then
+    rm -f -- "$HOME/.steam/steam.pid"
+  fi
   set +o errexit
   "@muvm@" \
     -f "@rootfs@" \

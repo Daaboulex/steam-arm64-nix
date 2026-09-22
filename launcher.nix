@@ -6,6 +6,7 @@
   gnutar,
   makeDesktopItem,
   xrdb,
+  util-linux,
   muvm,
   fex,
   steam-arm64-client,
@@ -53,6 +54,7 @@ runCommand "steam-arm64"
         client = "${steam-arm64-client}";
         muvm = lib.getExe muvm;
         xrdb = lib.getExe' xrdb "xrdb";
+        flock = lib.getExe' util-linux "flock";
         fexbin = "${fexInterpreter}/bin";
         fhs = "${steam-arm64-fhs}";
         rootfs = "${steam-x86-rootfs}";

@@ -6,6 +6,7 @@
   gnutar,
   makeDesktopItem,
   xrdb,
+  util-linux,
   muvm,
   socat,
   fex,
@@ -51,6 +52,7 @@ runCommand "steam-x86"
       replaceVars ./launcher-x86.sh {
         muvm = lib.getExe muvm;
         xrdb = lib.getExe' xrdb "xrdb";
+        flock = lib.getExe' util-linux "flock";
         fexbin = "${fexInterpreter}/bin";
         fexsuite = "${fex}/bin";
         socatbin = "${socat}/bin";

@@ -42,6 +42,13 @@ if [ ! -t 0 ] && { [ -c /dev/stdin ] || [ -f /dev/stdin ]; }; then
   exec < <(:)
 fi
 
+# A guest numbers its processes from one, so the pid file the last client left
+# names a live process in the next guest and the client exits believing it is
+# already running. With no guest holding muvm's lock the file is stale.
+if "@flock@" -n "${XDG_RUNTIME_DIR:?}/muvm.lock" true 2>/dev/null; then
+  rm -f -- "$HOME/.steam/steam.pid"
+fi
+
 exec "@muvm@" \
   -f "@rootfs@" \
   --gpu-mode=drm \
