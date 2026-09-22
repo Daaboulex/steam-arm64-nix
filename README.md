@@ -90,6 +90,10 @@ provider, python3 for Valve's FEX tool, the cursor path, the session bus, and
 the Steam apps the client must have downloaded (FEX, Steam Linux Runtime 4.0
 arm64, a Proton for ARM64).
 
+Extra compatibility tools reach the client through `STEAM_EXTRA_COMPAT_TOOLS_PATHS`,
+the same variable nixpkgs' `programs.steam.extraCompatPackages` sets; both
+launchers hand it to the guest when the session has it.
+
 ## Updates
 
 `scripts/update.sh [publicbeta|stable]` regenerates `client-sources.nix` from

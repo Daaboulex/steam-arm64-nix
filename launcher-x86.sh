@@ -28,7 +28,7 @@ guest_env=(
   -e "PATH=@fexbin@:@fexsuite@:@socatbin@:/usr/bin:/bin:/usr/sbin:/sbin"
   -e "MESA_SHADER_CACHE_MAX_SIZE=50G"
 )
-for var in XCURSOR_THEME XCURSOR_SIZE XCURSOR_PATH DBUS_SESSION_BUS_ADDRESS; do
+for var in XCURSOR_THEME XCURSOR_SIZE XCURSOR_PATH DBUS_SESSION_BUS_ADDRESS STEAM_EXTRA_COMPAT_TOOLS_PATHS; do
   if [ -n "${!var:-}" ]; then
     guest_env+=(-e "$var=${!var}")
   fi
