@@ -142,6 +142,24 @@
             touch "$out"
           '';
 
+          checks.join-stdin-epollable = pkgs.runCommand "steam-join-stdin-epollable" { } ''
+            status=0
+            for l in ${./launcher.sh} ${./launcher-x86.sh}; do
+              if ! grep -qF 'exec < <(:)' "$l"; then
+                echo "$l hands muvm a stdin it may not be able to watch"
+                status=1
+              fi
+            done
+            if [ "$status" -ne 0 ]; then
+              echo "muvm's io loop for a launch into a running guest adds its stdin to epoll,"
+              echo "which fails with EPERM on /dev/null or a regular file after the request was"
+              echo "already sent; a desktop entry or a steam:// link launches with exactly that"
+              echo "stdin. Replace it with a pipe at end of file before calling muvm."
+              exit 1
+            fi
+            touch "$out"
+          '';
+
           checks.steam-arm64-x86-games-wiring = pkgs.runCommand "steam-arm64-x86-games-wiring" { } ''
             l=${self'.packages.steam-arm64}/bin/steam-arm64
             grep -q -- '-f "${self'.packages.steam-x86-rootfs}"' "$l" \

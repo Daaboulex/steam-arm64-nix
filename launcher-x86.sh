@@ -34,6 +34,14 @@ for var in XCURSOR_THEME XCURSOR_SIZE XCURSOR_PATH DBUS_SESSION_BUS_ADDRESS; do
   fi
 done
 
+# A launch into a guest that is already running has muvm register its own
+# stdin with epoll, which refuses a device or a regular file, so a launch from
+# a desktop entry or a link, whose stdin is /dev/null, dies after the request
+# went out. A pipe at end of file reads the same and is accepted.
+if [ ! -t 0 ] && { [ -c /dev/stdin ] || [ -f /dev/stdin ]; }; then
+  exec < <(:)
+fi
+
 exec "@muvm@" \
   -f "@rootfs@" \
   --gpu-mode=drm \

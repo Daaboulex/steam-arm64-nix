@@ -70,6 +70,14 @@ done
 # FEXInterpreter on the PATH it inherits, a name FEX no longer installs.
 export PATH="@fexbin@:$PATH"
 
+# A launch into a guest that is already running has muvm register its own
+# stdin with epoll, which refuses a device or a regular file, so a launch from
+# a desktop entry or a link, whose stdin is /dev/null, dies after the request
+# went out. A pipe at end of file reads the same and is accepted.
+if [ ! -t 0 ] && { [ -c /dev/stdin ] || [ -f /dev/stdin ]; }; then
+  exec < <(:)
+fi
+
 # Valve exits 42 to ask for a restart, which is how the client hands control
 # back after it updates itself.
 while :; do
