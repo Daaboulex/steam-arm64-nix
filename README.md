@@ -139,7 +139,7 @@ its evidence: a Steam log under `logs/`, a launch log, or a probe of the guest.
 | Remote Play, Steam Link, LAN transfer | the guest cannot announce itself: passt opens its sockets without broadcast and gives link-local multicast no scope, so the client's UDP broadcast to 27036 and its IPv6 multicast never leave (passt bug 163, open). Both launchers publish UDP 27031 and 27036 and TCP 27036 and 27037, so a LAN device's discovery and stream reach the guest through the host's bound sockets; untested with a device. Pairing by PIN and the same-account host list go through Steam's servers and need no broadcast | same | every launch log; `remote_connections.txt`; passt `udp_flow.c`, `util.c`, `pif.c` |
 | In-game overlay | libraries present for aarch64 and, for FEX games, x86-64; attachment under FEX unverified | present | `steamrtarm64/` and `ubuntu12_64/` |
 | Game Recording | present, unverified: the logs show it declining a game it is disabled for | same | `console-linux.txt` |
-| Big Picture | unverified | unverified | no run yet |
+| Big Picture | unverified; one report of the Quick Access Menu freezing the ARM64 client's UI (steam-for-linux#13544, closed unplanned) | unverified | no run yet |
 | Audio | works | works | the guest sees `pipewire-0`; `steamui_audio.txt` lists sinks |
 | Voice chat, microphone | unverified | unverified | no run yet |
 | Screenshots | unverified | unverified | needs the overlay |
@@ -147,6 +147,15 @@ its evidence: a Steam log under `logs/`, a launch log, or a probe of the guest.
 | `steam://` links | works: the native entry owns the scheme | opened by the native client | desktop entries |
 | Hardware survey | partial: the GPU is reported, `lspci` finds no `/proc/bus/pci` | partial | `steamsysinfo.txt` |
 | Android games (Lepton) | not on this machine: the guest kernel has no binder | not possible | a guest's `/proc/filesystems` |
+
+Valve documents none of this for the desktop arm64 client: no release note, no
+support page, no reply on its tracker names it (checked 2026-09-23). What Valve
+documents is the mechanism the client uses: the Steam Linux Runtime 4.0 arm64
+tool (its README says 32-bit ARM is unsupported), `emulator.json` and
+`graphics-provider.json` in steam-runtime-tools, and the Proton README, which
+says an ARM64 build cannot be used from the x86 client under FEX. Lepton's README
+says it is meant for Steam Frame and that most users should take the Lepton the
+client ships.
 
 Two costs of one shared root, accepted for a fallback client: both packages ship
 the x86-64 overlay files under `ubuntu12_64/` and `steamrt64/` at different
