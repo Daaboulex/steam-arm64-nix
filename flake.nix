@@ -65,6 +65,7 @@
             trim-trailing-whitespace.excludes = [ "\\.patch$" ];
             end-of-file-fixer.excludes = [ "\\.patch$" ];
             typos.excludes = [ "\\.patch$" ];
+            typos.settings.config.default.extend-words.passt = "passt";
           };
 
           checks.muvm-patches-apply =

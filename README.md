@@ -117,6 +117,43 @@ Extra compatibility tools reach the client through `STEAM_EXTRA_COMPAT_TOOLS_PAT
 the same variable nixpkgs' `programs.steam.extraCompatPackages` sets; both
 launchers hand it to the guest when the session has it.
 
+## What works on this machine
+
+Both clients share one Steam root, so the library, the downloads and the
+compatibility tools are the same in each. The native client is the daily one;
+the x86 client is the fallback for what the ARM path cannot run. Each row names
+its evidence: a Steam log under `logs/`, a launch log, or a probe of the guest.
+
+| Feature | Steam (native) | Steam (x86) | Evidence |
+|---|---|---|---|
+| Store, library, community | works | works | both render through the x86 web helper under FEX |
+| Moving and resizing the window | works | works | the swap above; the traces behind it |
+| Downloads, client updates | works | works | `bootstrap_log.txt`, `content_log.txt` |
+| Cloud saves | works | works | `cloud_log.txt` uploads and downloads per app |
+| Workshop | works | works | `workshop_log.txt` subscription updates |
+| Shader pre-caching | works | works | `shader_log.txt` writes the hit cache for the M1 GPU |
+| Windows games | works: Proton 11.0 (ARM64), Proton Experimental (ARM64), GE-Proton aarch64, Proton-CachyOS arm64 | works: Proton 10.0, Experimental, Hotfix | a game ran under GE-Proton11-7; `compat_log.txt` registrations |
+| x86 Linux games | wired: Valve's FEX tool, Runtime 4.0 arm64, the rootfs Mesa; no title exercised yet | works, FEX with Runtime sniper | `steam-arm64 --doctor`; the x86 client's own runs |
+| aarch64 Linux games | native | not possible | by construction |
+| Gamepads | works through muvm's hidpipe, always on: host joysticks recreated by uinput in the guest, rumble included; no hidraw, since the guest kernel has no HID stack, so gyro, touchpad, lightbar and Steam Input's HID drivers are missing (AsahiLinux/muvm#244) | same | `controller.txt`: a DualSense opened in the native client; muvm `hidpipe_server.rs`; libkrunfw's aarch64 config; a guest lists no `/dev/hidraw` |
+| Remote Play, Steam Link, LAN transfer | discovery broken: passt refuses the UDP broadcast; the host side listens on 27036 | same | every launch log; `remote_connections.txt` |
+| In-game overlay | libraries present for aarch64 and, for FEX games, x86-64; attachment under FEX unverified | present | `steamrtarm64/` and `ubuntu12_64/` |
+| Game Recording | present, unverified: the logs show it declining a game it is disabled for | same | `console-linux.txt` |
+| Big Picture | unverified | unverified | no run yet |
+| Audio | works | works | the guest sees `pipewire-0`; `steamui_audio.txt` lists sinks |
+| Voice chat, microphone | unverified | unverified | no run yet |
+| Screenshots | unverified | unverified | needs the overlay |
+| Tray icon, notifications | works over the bridged session bus | works | the launchers' bus checks |
+| `steam://` links | works: the native entry owns the scheme | opened by the native client | desktop entries |
+| Hardware survey | partial: the GPU is reported, `lspci` finds no `/proc/bus/pci` | partial | `steamsysinfo.txt` |
+| Android games (Lepton) | not on this machine: the guest kernel has no binder | not possible | a guest's `/proc/filesystems` |
+
+Two costs of one shared root, accepted for a fallback client: both packages ship
+the x86-64 overlay files under `ubuntu12_64/` and `steamrt64/` at different
+sizes, so the first start of either client after the other one ran repairs
+those files and restarts once; and pressure-vessel regenerates the locales it
+misses at each container start, which is upstream noise.
+
 ## Updates
 
 `scripts/update.sh [publicbeta|stable]` regenerates `client-sources.nix` from

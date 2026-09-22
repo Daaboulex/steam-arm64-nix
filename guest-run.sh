@@ -127,6 +127,17 @@ if [ "${1:-}" = "--doctor" ]; then
   check "Proton (ARM64) installed" sh -c 'ls -d "$1"/Proton*ARM64*/proton >/dev/null 2>&1' sh "$tools"
   check "web helper can move and resize the window (x86 helper, or a fixed aarch64 one)" sh -c 'if ! grep -q "$1" "$2"; then grep -q XShapeQueryExtension "$3"; fi' sh "$marker" "$helper" "$helper_dir/steamwebhelper"
   check "web helper swap passes Valve's size and CRC check, or is not in place" sh -c 'if grep -q "$1" "$2"; then python3 "$4" verify "$2" "$3"; fi' sh "$marker" "$helper" "$pristine" @helperCrc@
+  check "GPU render node in the guest" test -e /dev/dri/renderD128
+  check "audio server socket shared into the guest" test -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pipewire-0"
+  check "aarch64 overlay library installed" test -f "$helper_dir/gameoverlayrenderer.so"
+  check "x86-64 overlay library for FEX games installed" test -f "$steam_root/ubuntu12_64/gameoverlayrenderer.so"
+  gamepads=$(find /dev/input -maxdepth 1 -name 'event*' 2>/dev/null | wc -l)
+  printf 'info  gamepads forwarded by muvm into the guest: %s (attach one on the host and it appears here)\n' "$gamepads"
+  if grep -q binder /proc/filesystems 2>/dev/null; then
+    printf 'info  guest kernel offers binder, the Android layer could be tried\n'
+  else
+    printf 'info  guest kernel has no binder, so the Android layer (Lepton) cannot run here\n'
+  fi
   if [ -n "${STEAM_EXTRA_COMPAT_TOOLS_PATHS:-}" ]; then
     for dir in ${STEAM_EXTRA_COMPAT_TOOLS_PATHS//:/ }; do
       check "extra tool ${dir##*/} complete" test -f "$dir/toolmanifest.vdf" -a -f "$dir/compatibilitytool.vdf" -a -x "$dir/proton"
