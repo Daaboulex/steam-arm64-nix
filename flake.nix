@@ -142,6 +142,21 @@
             touch "$out"
           '';
 
+          checks.helper-swap-heals = pkgs.runCommand "steam-helper-swap-heals" { } ''
+            grep -q 'XShapeQueryExtension' ${./guest-run.sh} \
+              || {
+                echo "the web helper swap has lost its expiry: it must stop once Valve's aarch64"
+                echo "helper queries the Shape extension, which is the code the swap stands in for"
+                exit 1
+              }
+            grep -q 'steamwebhelper.sh.valve' ${./guest-run.sh} \
+              || {
+                echo "the web helper swap no longer keeps Valve's script beside it"
+                exit 1
+              }
+            touch "$out"
+          '';
+
           checks.join-stdin-epollable = pkgs.runCommand "steam-join-stdin-epollable" { } ''
             status=0
             for l in ${./launcher.sh} ${./launcher-x86.sh}; do

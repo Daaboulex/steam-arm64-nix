@@ -77,6 +77,19 @@ To test the x86_64 client, translated by FEX inside the microVM:
 script -q -c "nix run .#steam-x86" steam-x86.log
 ```
 
+## Moving and resizing the native client's window
+
+Valve's aarch64 web helper never carves the input shape of the window it
+embeds, so presses on the client's own title bar and edges never reach the
+window manager and the window cannot be moved or resized. The x86 web helper
+does carve it, so the launcher hands the native client that helper, run by FEX
+inside the same guest, on every start: it keeps Valve's script beside the swap
+as `steamwebhelper.sh.valve`, pads the swap to the size Valve's file check
+expects, and stops swapping by itself once Valve's aarch64 helper carries the
+shape code. It needs the x86 client installed in the same Steam root, which
+`steam-x86` does on its first run. The UI then renders through FEX, the way the
+whole x86 client does.
+
 ## Checking the stack
 
 ```bash
