@@ -119,7 +119,7 @@ pin_client() {
   if [ -f "$out" ]; then
     old_version="$(sed -nE 's/^  version = "([0-9]+)";$/\1/p' "$out" | head -1)"
   fi
-  old_versions+=("$channel $old_version")
+  if [ "$channel" = stable ]; then old_versions+=("$old_version"); fi
 
   if ! curl -fsSL "$BASE_URL/$manifest" -o "$vdf"; then
     err "could not fetch $manifest"
@@ -133,7 +133,7 @@ pin_client() {
     output "error_type" "manifest-shape"
     return 1
   fi
-  new_versions+=("$channel $version")
+  if [ "$channel" = stable ]; then new_versions+=("$version"); fi
 
   wanted="$(grep -cE '^[[:blank:]]"[a-z0-9_]+(_all|_linuxarm64_linuxarm64)"$' "$vdf" || true)"
   components="$(awk '
@@ -193,12 +193,6 @@ for channel in ${1:-stable publicbeta}; do
     exit "$status"
   fi
 done
-output "old_version" "$(
-  IFS=,
-  echo "${old_versions[*]}"
-)"
-output "new_version" "$(
-  IFS=,
-  echo "${new_versions[*]}"
-)"
+output "old_version" "${old_versions[0]:-}"
+output "new_version" "${new_versions[0]:-}"
 output "updated" "$updated"
