@@ -31,7 +31,9 @@
           };
         in
         {
-          packages.default = pkgs.callPackage ./package.nix { };
+          packages.steam-arm64-client = pkgs.callPackage ./package.nix { channel = "stable"; };
+          packages.steam-arm64-client-beta = pkgs.callPackage ./package.nix { channel = "publicbeta"; };
+          packages.default = self'.packages.steam-arm64-client;
           packages.libdbusmenu-gtk2 = pkgs.callPackage ./libdbusmenu-gtk2.nix { };
           packages.libappindicator-gtk2 = pkgs.callPackage ./libappindicator-gtk2.nix {
             inherit (self'.packages) libdbusmenu-gtk2;
@@ -57,7 +59,13 @@
 
           packages.steam-arm64 = pkgs.callPackage ./launcher.nix {
             muvm = pkgs.callPackage ./muvm-patched.nix { };
-            steam-arm64-client = self'.packages.default;
+            channel = "stable";
+            inherit (self'.packages) steam-arm64-client steam-arm64-fhs steam-x86-rootfs;
+          };
+          packages.steam-arm64-beta = pkgs.callPackage ./launcher.nix {
+            muvm = pkgs.callPackage ./muvm-patched.nix { };
+            channel = "publicbeta";
+            steam-arm64-client = self'.packages.steam-arm64-client-beta;
             inherit (self'.packages) steam-arm64-fhs steam-x86-rootfs;
           };
 
@@ -121,6 +129,7 @@
             in
             pkgs.runCommand "steam-arm64-overlay-resolves" { } ''
               test -x ${overlaid.steam-arm64}/bin/steam-arm64
+              test -x ${overlaid.steam-arm64-beta}/bin/steam-arm64
               test -x ${overlaid.steam-arm64-fhs}/bin/steam-arm64-fhs
               touch "$out"
             '';
@@ -347,11 +356,16 @@
         muvm = final.callPackage ./muvm-patched.nix { inherit (prev) muvm; };
         libdbusmenu-gtk2 = final.callPackage ./libdbusmenu-gtk2.nix { };
         libappindicator-gtk2 = final.callPackage ./libappindicator-gtk2.nix { };
-        steam-arm64-client = final.callPackage ./package.nix { };
+        steam-arm64-client = final.callPackage ./package.nix { channel = "stable"; };
+        steam-arm64-client-beta = final.callPackage ./package.nix { channel = "publicbeta"; };
         steam-runtime-arm64 = final.callPackage ./runtime.nix { };
         steam-arm64-fhs = final.callPackage ./fhs.nix { };
         steam-x86-rootfs = final.callPackage ./fex-rootfs-x86.nix { };
-        steam-arm64 = final.callPackage ./launcher.nix { };
+        steam-arm64 = final.callPackage ./launcher.nix { channel = "stable"; };
+        steam-arm64-beta = final.callPackage ./launcher.nix {
+          channel = "publicbeta";
+          steam-arm64-client = final.steam-arm64-client-beta;
+        };
       };
     };
 }

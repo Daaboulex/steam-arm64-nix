@@ -3,9 +3,10 @@
   stdenvNoCC,
   fetchurl,
   unzip,
+  channel,
 }:
 let
-  sources = import ./client-sources.nix;
+  sources = import (./client-sources + "/${channel}.nix");
   component =
     name: spec:
     fetchurl {
@@ -16,7 +17,7 @@ let
   archives = lib.mapAttrsToList component sources.components;
 in
 stdenvNoCC.mkDerivation {
-  pname = "steam-arm64-client";
+  pname = "steam-arm64-client" + lib.optionalString (channel != "stable") "-beta";
   inherit (sources) version;
 
   dontUnpack = true;

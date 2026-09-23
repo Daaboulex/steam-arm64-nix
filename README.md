@@ -41,8 +41,19 @@ microVM, in the FHS layout pressure-vessel needs so its webhelper renders.
 }
 ```
 
-Then take `overlays.default`, which provides `steam-arm64-client`. The client is
-unfree, so the consumer sets `nixpkgs.config.allowUnfree = true`.
+Then take `overlays.default`, which provides the launchers `steam-arm64` and
+`steam-arm64-beta`, the client trees `steam-arm64-client` and
+`steam-arm64-client-beta` behind them, and `steam-x86`. The client is unfree, so
+the consumer sets `nixpkgs.config.allowUnfree = true`.
+
+## Channels
+
+`steam-arm64` pins Valve's stable manifest and leaves the client on stable.
+`steam-arm64-beta` pins the publicbeta manifest and opts the client into it at
+the first install, by writing `package/beta` in the Steam root. After that the
+client owns that file: its own settings switch the channel, and the launcher
+never rewrites it. Both clients in the shared root read the same file, so the
+x86 client follows the same channel.
 
 ## Usage
 
@@ -158,8 +169,9 @@ misses at each container start, which is upstream noise.
 
 ## Updates
 
-`scripts/update.sh [publicbeta|stable]` regenerates `client-sources.nix` from
-Valve's manifest, which carries each component's sha256.
+`scripts/update.sh [stable|publicbeta]` regenerates `client-sources/<channel>.nix`
+from Valve's manifest, which carries each component's sha256; with no argument
+it regenerates both channels.
 
 ## License
 

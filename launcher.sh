@@ -10,6 +10,10 @@ if [ ! -x "$steam_root/steamrtarm64/steam" ]; then
   mkdir -p -- "$steam_root"
   cp --archive --no-target-directory -- "@client@" "$steam_root"
   chmod -R u+rwX -- "$steam_root"
+  if [ "@channel@" != stable ]; then
+    mkdir -p -- "$steam_root/package"
+    printf '%s\n' "@channel@" >"$steam_root/package/beta"
+  fi
 fi
 
 mkdir -p -- "$HOME/.steam" "$steam_root/package"
@@ -18,10 +22,6 @@ ln -sfn -- "$steam_root" "$HOME/.steam/steam"
 ln -sfn -- "$steam_root/linuxarm64" "$HOME/.steam/sdkarm64"
 # Steam preloads the overlay through .steam/bin64/../steamrtarm64/, so bin64 must resolve.
 ln -sfn -- "$steam_root/steamrtarm64" "$HOME/.steam/bin64"
-
-if [ ! -s "$steam_root/package/beta" ]; then
-  printf '%s\n' "@channel@" >"$steam_root/package/beta"
-fi
 
 # The desktop publishes the cursor it wants in the X resource database, which is
 # where every other X client reads it, so the client follows the desktop rather

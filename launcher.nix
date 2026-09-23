@@ -12,6 +12,7 @@
   steam-arm64-client,
   steam-arm64-fhs,
   steam-x86-rootfs,
+  channel,
 }:
 let
   fexInterpreter = runCommand "fex-interpreter" { } ''
@@ -27,7 +28,7 @@ let
   };
   desktopItem = makeDesktopItem {
     name = "steam-arm64";
-    desktopName = "Steam";
+    desktopName = "Steam" + lib.optionalString (channel != "stable") " (beta)";
     genericName = "Game Launcher";
     comment = "Valve's native aarch64 Steam client";
     exec = "steam-arm64 %U";
@@ -40,7 +41,7 @@ let
     ];
   };
 in
-runCommand "steam-arm64"
+runCommand ("steam-arm64" + lib.optionalString (channel != "stable") "-beta")
   {
     meta = {
       description = "Valve's aarch64 Steam client, launched in the 4K-page guest its binaries need";
@@ -59,7 +60,7 @@ runCommand "steam-arm64"
         fexbin = "${fexInterpreter}/bin";
         fhs = "${steam-arm64-fhs}";
         rootfs = "${steam-x86-rootfs}";
-        inherit (import ./client-sources.nix) channel;
+        inherit channel;
       }
     } "$out/bin/steam-arm64"
 

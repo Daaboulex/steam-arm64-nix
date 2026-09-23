@@ -97,6 +97,11 @@ if [ "${1:-}" = "--doctor" ]; then
   else
     printf 'info  guest kernel has no binder, so the Android layer (Lepton) cannot run here\n'
   fi
+  if [ -s "$steam_root/package/beta" ]; then
+    printf 'info  client channel: %s, from package/beta, which the client owns after the first install\n' "$(head -1 "$steam_root/package/beta")"
+  else
+    printf 'info  client channel: stable, no package/beta\n'
+  fi
   if [ -n "${STEAM_EXTRA_COMPAT_TOOLS_PATHS:-}" ]; then
     for dir in ${STEAM_EXTRA_COMPAT_TOOLS_PATHS//:/ }; do
       check "extra tool ${dir##*/} complete" test -f "$dir/toolmanifest.vdf" -a -f "$dir/compatibilitytool.vdf" -a -x "$dir/proton"
