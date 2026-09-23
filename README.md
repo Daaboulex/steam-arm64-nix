@@ -81,20 +81,13 @@ script -q -c "nix run .#steam-x86" steam-x86.log
 
 Valve's aarch64 web helper never carves the input shape of the window it
 embeds, so presses on the client's own title bar and edges never reach the
-window manager and the window cannot be moved or resized. The x86 web helper
-does carve it, so the launcher hands the native client that helper, run by FEX
-inside the same guest, on every start: it keeps Valve's script beside the swap
-as `steamwebhelper.sh.valve`, pads the swap to the size Valve's file check
-expects, and stops swapping by itself once Valve's aarch64 helper carries the
-shape code. It needs the x86 client installed in the same Steam root, which
-`steam-x86` does on its first run. The UI then renders through FEX, the way the
-whole x86 client does.
-
-Valve's client checks file sizes on a normal start and CRCs after an unclean
-one; a mismatch makes it reinstall its own package and restart. The swap is
-therefore padded to Valve's size and carries Valve's CRC in eight printable
-bytes after its marker line, chosen by `helper-crc.py` inside the sandbox on
-every start, so both checks pass and the client starts at once.
+window manager: the window's own chrome cannot move or resize it. The x86 web
+helper does carve it, and the traces of both clients prove the difference. The
+native client stays purely native all the same, because handing it the x86
+helper under FEX made its UI slow, and speed is what the native client is for.
+Until Valve's aarch64 helper carries the shape code, KWin moves and resizes the
+window as it does any other: Meta with the left button drags it, Meta with the
+right button resizes it, and the three title bar buttons work.
 
 Both clients open windows of class `steam`, so only the native client's desktop
 entry claims that class and the `steam://` scheme; a second claim would make
@@ -126,8 +119,8 @@ its evidence: a Steam log under `logs/`, a launch log, or a probe of the guest.
 
 | Feature | Steam (native) | Steam (x86) | Evidence |
 |---|---|---|---|
-| Store, library, community | works | works | both render through the x86 web helper under FEX |
-| Moving and resizing the window | works | works | the swap above; the traces behind it |
+| Store, library, community | works, native web helper | works, x86 web helper under FEX | both clients' web helper logs |
+| Moving and resizing by the window's own chrome | inert: Valve's aarch64 helper carves no input shape; Meta with a mouse button moves and resizes through KWin | works | the traces above |
 | Downloads, client updates | works | works | `bootstrap_log.txt`, `content_log.txt` |
 | Cloud saves | works | works | `cloud_log.txt` uploads and downloads per app |
 | Workshop | works | works | `workshop_log.txt` subscription updates |

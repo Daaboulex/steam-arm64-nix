@@ -57,45 +57,6 @@ if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
   fi
 fi
 
-# Valve's aarch64 web helper never carves the input shape of the window it
-# embeds, so the client's own title bar and edges never reach the window
-# manager: no drag, no resize. The x86 helper carves it, so the client gets
-# that helper, run by FEX in this guest, until the aarch64 helper carries the
-# shape code itself, which is what the grep on its binary waits for. Valve's
-# file check compares sizes, and CRCs after an unclean quit, so the swap is
-# padded to the size of the script it replaces and carries that script's CRC
-# in the slot after the marker; the script itself is kept beside it.
-helper_dir="$steam_root/steamrtarm64"
-helper="$helper_dir/steamwebhelper.sh"
-pristine="$helper_dir/steamwebhelper.sh.valve"
-x86_helper="$steam_root/ubuntu12_64/steamwebhelper.sh"
-marker='steam-arm64 hands the x86 web helper to this client'
-if grep -q XShapeQueryExtension "$helper_dir/steamwebhelper" 2>/dev/null || [ ! -x "$x86_helper" ]; then
-  if [ ! -x "$x86_helper" ]; then
-    echo "steam-arm64: no x86 client beside this one, so the window keeps Valve's aarch64 web helper and its title bar cannot move it; run steam-x86 once to install it" >&2
-  fi
-  if grep -q "$marker" "$helper" 2>/dev/null && [ -f "$pristine" ]; then
-    cp -p -- "$pristine" "$helper"
-  fi
-elif [ -f "$helper" ]; then
-  if ! grep -q "$marker" "$helper"; then
-    cp -p -- "$helper" "$pristine"
-  fi
-  swap=$(printf '#!/bin/bash\n# %s 00000000\nexport FEX_ROOTFS=/run/fex-emu/rootfs\nunset LIBGL_DRIVERS_PATH __EGL_VENDOR_LIBRARY_DIRS LIBVA_DRIVERS_PATH VDPAU_DRIVER_PATH VK_DRIVER_FILES\nexec FEXInterpreter %s "$@" --disable-gpu --disable-gpu-compositing' "$marker" "$x86_helper")
-  size=$(stat -c %s -- "$pristine")
-  pad=$((size - ${#swap} - 1))
-  if [ "$pad" -lt 0 ]; then
-    echo "steam-arm64: Valve's web helper script is shorter than the swap, so the client keeps Valve's aarch64 web helper" >&2
-    cp -p -- "$pristine" "$helper"
-  elif ! grep -q "$marker" "$helper" || ! python3 @helperCrc@ verify "$helper" "$pristine"; then
-    printf '%s%*s\n' "$swap" "$pad" '' >"$helper"
-    if ! python3 @helperCrc@ match "$helper" "$pristine" "$marker"; then
-      echo "steam-arm64: the swap could not be given Valve's CRC, so the client keeps Valve's aarch64 web helper" >&2
-      cp -p -- "$pristine" "$helper"
-    fi
-  fi
-fi
-
 # steam-arm64 --doctor runs here, inside the guest and the sandbox the client
 # gets, and reports each thing an x86 game needs, so the stack can be checked
 # without launching a game.
@@ -125,11 +86,9 @@ if [ "${1:-}" = "--doctor" ]; then
   check "Valve's FEX tool starts" env STEAM_COMPAT_DATA_PATH=/tmp "$tools/FEX-Emu/fex-compat-tool" --help
   check "Steam Linux Runtime 4.0 arm64 installed (app 4185400)" test -x "$tools/SteamLinuxRuntime_4-arm64/pressure-vessel/bin/pressure-vessel-wrap"
   check "Proton (ARM64) installed" sh -c 'ls -d "$1"/Proton*ARM64*/proton >/dev/null 2>&1' sh "$tools"
-  check "web helper can move and resize the window (x86 helper, or a fixed aarch64 one)" sh -c 'if ! grep -q "$1" "$2"; then grep -q XShapeQueryExtension "$3"; fi' sh "$marker" "$helper" "$helper_dir/steamwebhelper"
-  check "web helper swap passes Valve's size and CRC check, or is not in place" sh -c 'if grep -q "$1" "$2"; then python3 "$4" verify "$2" "$3"; fi' sh "$marker" "$helper" "$pristine" @helperCrc@
   check "GPU render node in the guest" test -e /dev/dri/renderD128
   check "audio server socket shared into the guest" test -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pipewire-0"
-  check "aarch64 overlay library installed" test -f "$helper_dir/gameoverlayrenderer.so"
+  check "aarch64 overlay library installed" test -f "$steam_root/steamrtarm64/gameoverlayrenderer.so"
   check "x86-64 overlay library for FEX games installed" test -f "$steam_root/ubuntu12_64/gameoverlayrenderer.so"
   gamepads=$(find /dev/input -maxdepth 1 -name 'event*' 2>/dev/null | wc -l)
   printf 'info  gamepads forwarded by muvm into the guest: %s (attach one on the host and it appears here)\n' "$gamepads"

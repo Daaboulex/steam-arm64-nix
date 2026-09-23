@@ -16,12 +16,7 @@ let
     ];
   };
   guestRun = runCommand "steam-arm64-guest-run" { } ''
-    install -Dm755 ${
-      replaceVars ./guest-run.sh {
-        dbusConf = "${./session-bus.conf}";
-        helperCrc = "${./helper-crc.py}";
-      }
-    } "$out"
+    install -Dm755 ${replaceVars ./guest-run.sh { dbusConf = "${./session-bus.conf}"; }} "$out"
   '';
 in
 buildFHSEnv {
