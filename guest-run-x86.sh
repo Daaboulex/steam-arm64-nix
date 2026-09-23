@@ -2,6 +2,10 @@
 set -o nounset
 
 export FEX_ROOTFS=/run/fex-emu/rootfs
+# The per-application profile beside the emulator turns off the optimisation
+# that crashes Steam's interface; FEX reads profiles only from the directory
+# this names, so without it the profile is shipped and never applied.
+export FEX_APP_CONFIG_LOCATION=@appconfig@
 
 mkdir -p /run/dbus 2>/dev/null || true
 if [ ! -S /run/dbus/system_bus_socket ]; then

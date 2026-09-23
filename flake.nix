@@ -47,6 +47,7 @@
           packages.fex-emulator-x86 = pkgs.callPackage ./fex-emulator-x86.nix { };
           packages.steam-x86-fhs = pkgs.callPackage ./fhs-x86.nix {
             steam-x86-entry = pkgs.steam-unwrapped;
+            inherit (self'.packages) fex-emulator-x86;
           };
           packages.steam-x86 = pkgs.callPackage ./launcher-x86.nix {
             muvm = pkgs.callPackage ./muvm-patched.nix { };

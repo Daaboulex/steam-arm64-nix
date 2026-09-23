@@ -5,6 +5,7 @@
   runCommand,
   fex,
   steam-x86-entry,
+  fex-emulator-x86,
 }:
 let
   fexInterpreter = runCommand "fex-interpreter" { } ''
@@ -18,6 +19,7 @@ let
         fexinterpreter = "${fexInterpreter}/bin/FEXInterpreter";
         steam = "${steam-x86-entry}/bin/steam";
         dbusConf = "${./session-bus.conf}";
+        appconfig = "${fex-emulator-x86}/share/fex-emu/AppConfig";
       }
     } "$out"
   '';
