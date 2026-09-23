@@ -4,5 +4,6 @@ muvm.overrideAttrs (old: {
     ./muvm-mask-mit-shm.patch
     ./muvm-bridge-dbus.patch
     ./muvm-vm-tuning.patch
+    ./muvm-guest-groups.patch
   ];
 })

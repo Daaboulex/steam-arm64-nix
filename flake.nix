@@ -88,6 +88,7 @@
               patch -p1 <${./muvm-mask-mit-shm.patch}
               patch -p1 <${./muvm-bridge-dbus.patch}
               patch -p1 <${./muvm-vm-tuning.patch}
+              patch -p1 <${./muvm-guest-groups.patch}
               touch "$out"
             '';
 
@@ -96,6 +97,17 @@
               echo "muvm ${pkgs.muvm.version} now names MIT-SHM in its own X11 bridge."
               echo "Read what it does there. If it masks or proxies the extension,"
               echo "delete muvm-mask-mit-shm.patch, its override in launcher.nix, and this check."
+              exit 1
+            fi
+            touch "$out"
+          '';
+
+          checks.muvm-groups-divergence = pkgs.runCommand "muvm-groups-divergence" { } ''
+            if grep -q setgroups ${pkgs.muvm.src}/crates/muvm/src/guest/user.rs; then
+              echo "muvm ${pkgs.muvm.version} now sets the supplementary groups itself."
+              echo "Read what it claims. If the command in the vm ends up in the host's"
+              echo "input group, delete muvm-guest-groups.patch, its line in"
+              echo "muvm-patched.nix and in muvm-patches-apply, and this check."
               exit 1
             fi
             touch "$out"
