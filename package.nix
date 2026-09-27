@@ -3,7 +3,9 @@
   stdenvNoCC,
   fetchurl,
   unzip,
+  makeWrapper,
   channel,
+  lsof,
 }:
 let
   sources = import (./client-sources + "/${channel}.nix");
@@ -24,7 +26,10 @@ stdenvNoCC.mkDerivation {
   dontConfigure = true;
   dontBuild = true;
 
-  nativeBuildInputs = [ unzip ];
+  nativeBuildInputs = [
+    unzip
+    makeWrapper
+  ];
 
   installPhase = ''
     runHook preInstall
@@ -58,6 +63,10 @@ stdenvNoCC.mkDerivation {
     done < <(find "$out" -type f -print0)
 
     test -x "$out/steamrtarm64/steam"
+
+    for s in $out/bin/steam-arm64*; do
+      wrapProgram $s --prefix PATH : "${lib.makeBinPath [ lsof ]}"
+    done
     runHook postInstall
   '';
 
