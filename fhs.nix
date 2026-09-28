@@ -30,6 +30,7 @@ buildFHSEnv {
       coreutils
       file
       lsb-release
+      lsof
       pciutils
       python3
       usbutils
