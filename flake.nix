@@ -89,6 +89,7 @@
               patch -p1 <${./muvm-bridge-dbus.patch}
               patch -p1 <${./muvm-vm-tuning.patch}
               patch -p1 <${./muvm-guest-groups.patch}
+              patch -p1 <${./muvm-guest-dns.patch}
               touch "$out"
             '';
 
@@ -123,6 +124,30 @@
               echo "muvm ${pkgs.muvm.version} now tunes the guest's page reporting or compaction itself."
               echo "Read what it sets. If freed guest memory reaches the host without our values,"
               echo "drop RETURN_FREED_MEMORY_TO_HOST from muvm-vm-tuning.patch and delete this check."
+              exit 1
+            fi
+            touch "$out"
+          '';
+
+          checks.muvm-dns-divergence = pkgs.runCommand "muvm-dns-divergence" { } ''
+            src=${pkgs.muvm.src}/crates/muvm/src/guest
+            if [ ! -d "$src" ]; then
+              echo "muvm ${pkgs.muvm.version} has no $src; find where the guest init lives now."
+              exit 1
+            fi
+            if grep -rq stub-resolv "$src"; then
+              echo "muvm ${pkgs.muvm.version} now names stub-resolv in its guest code."
+              echo "Inside the vm, check that getent hosts resolves a name without muvm-guest-dns.patch."
+              echo "If it does, delete that patch, its line in muvm-patched.nix and in muvm-patches-apply,"
+              echo "and this check."
+              exit 1
+            fi
+            mentions=$(grep -rho resolv "$src" | wc -l)
+            if [ "$mentions" -ne 11 ]; then
+              echo "muvm ${pkgs.muvm.version} changed how the guest writes resolv.conf ($mentions mentions, was 11)."
+              echo "Inside the vm, check that getent hosts resolves a name without muvm-guest-dns.patch."
+              echo "If it does, delete that patch, its line in muvm-patched.nix and in muvm-patches-apply,"
+              echo "and this check; if not, set the expected count to $mentions."
               exit 1
             fi
             touch "$out"

@@ -1,0 +1,130 @@
+--- a/crates/muvm/src/guest/bin/muvm-guest.rs
++++ b/crates/muvm/src/guest/bin/muvm-guest.rs
+@@ -2,6 +2,7 @@
+ use std::io::Read;
+ use std::os::fd::AsFd;
+ use std::panic::catch_unwind;
++use std::path::{Component, Path, PathBuf};
+ use std::process::{Command, ExitCode};
+ use std::{cmp, env, fs, thread};
+ 
+@@ -24,6 +25,49 @@
+ 
+ const KRUN_CONFIG: &str = "KRUN_CONFIG";
+ 
++fn lexically_normal(path: &Path) -> PathBuf {
++    let mut normal = PathBuf::new();
++    for component in path.components() {
++        match component {
++            Component::ParentDir => {
++                normal.pop();
++            },
++            Component::CurDir => {},
++            other => normal.push(other.as_os_str()),
++        }
++    }
++    normal
++}
++
++fn resolv_conf_target_seen_from(host_root: &Path) -> PathBuf {
++    let mut link = PathBuf::from("/etc/resolv.conf");
++    for _ in 0..16 {
++        let relative = link.strip_prefix("/").unwrap_or(&link);
++        let Ok(next) = fs::read_link(host_root.join(relative)) else {
++            break;
++        };
++        let parent = link.parent().unwrap_or(Path::new("/"));
++        link = lexically_normal(&parent.join(next));
++        if link.starts_with("/run") {
++            break;
++        }
++    }
++    link
++}
++
++fn materialize_resolv_conf_target() -> Result<()> {
++    let target = resolv_conf_target_seen_from(Path::new("/run/muvm-host"));
++    if !target.starts_with("/run") || target.exists() {
++        return Ok(());
++    }
++    if let Some(dir) = target.parent() {
++        fs::create_dir_all(dir).with_context(|| format!("Failed to create {dir:?}"))?;
++    }
++    fs::copy("/run/resolv.conf", &target)
++        .with_context(|| format!("Failed to copy /run/resolv.conf to {target:?}"))?;
++    Ok(())
++}
++
+ fn main() -> Result<ExitCode> {
+     env_logger::init();
+ 
+@@ -146,6 +190,10 @@
+ 
+     configure_network()?;
+ 
++    if let Err(err) = materialize_resolv_conf_target() {
++        eprintln!("muvm-guest: name lookups may fail in the vm: {err:#}");
++    }
++
+     let run_path = match setup_user(Uid::from(options.uid), Gid::from(options.gid)) {
+         Ok(p) => p,
+         Err(err) => return Err(err).context("Failed to set up user, bailing out"),
+@@ -190,3 +238,58 @@
+     let rt = tokio::runtime::Runtime::new().unwrap();
+     rt.block_on(async { server_main(options.command.command, options.command.command_args).await })
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use std::os::unix::fs::symlink;
++
++    fn fake_host(name: &str) -> PathBuf {
++        let root = env::temp_dir().join(format!("muvm-resolv-{name}-{}", std::process::id()));
++        let _ = fs::remove_dir_all(&root);
++        fs::create_dir_all(root.join("etc/static")).unwrap();
++        root
++    }
++
++    #[test]
++    fn follows_a_nixos_chain_into_run() {
++        let root = fake_host("nixos");
++        symlink("static/resolv.conf", root.join("etc/resolv.conf")).unwrap();
++        symlink(
++            "/run/systemd/resolve/stub-resolv.conf",
++            root.join("etc/static/resolv.conf"),
++        )
++        .unwrap();
++        assert_eq!(
++            resolv_conf_target_seen_from(&root),
++            PathBuf::from("/run/systemd/resolve/stub-resolv.conf")
++        );
++        fs::remove_dir_all(&root).unwrap();
++    }
++
++    #[test]
++    fn follows_a_relative_fedora_link_into_run() {
++        let root = fake_host("fedora");
++        symlink(
++            "../run/systemd/resolve/stub-resolv.conf",
++            root.join("etc/resolv.conf"),
++        )
++        .unwrap();
++        assert_eq!(
++            resolv_conf_target_seen_from(&root),
++            PathBuf::from("/run/systemd/resolve/stub-resolv.conf")
++        );
++        fs::remove_dir_all(&root).unwrap();
++    }
++
++    #[test]
++    fn leaves_a_plain_file_alone() {
++        let root = fake_host("plain");
++        fs::write(root.join("etc/resolv.conf"), "nameserver 192.0.2.1\n").unwrap();
++        assert_eq!(
++            resolv_conf_target_seen_from(&root),
++            PathBuf::from("/etc/resolv.conf")
++        );
++        fs::remove_dir_all(&root).unwrap();
++    }
++}
