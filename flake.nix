@@ -113,6 +113,21 @@
             touch "$out"
           '';
 
+          checks.muvm-memory-divergence = pkgs.runCommand "muvm-memory-divergence" { } ''
+            src=${pkgs.muvm.src}/crates/muvm/src
+            if [ ! -d "$src" ]; then
+              echo "muvm ${pkgs.muvm.version} has no $src; find where the guest init lives now."
+              exit 1
+            fi
+            if grep -rqE 'page_reporting_order|compaction_proactiveness' "$src"; then
+              echo "muvm ${pkgs.muvm.version} now tunes the guest's page reporting or compaction itself."
+              echo "Read what it sets. If freed guest memory reaches the host without our values,"
+              echo "drop RETURN_FREED_MEMORY_TO_HOST from muvm-vm-tuning.patch and delete this check."
+              exit 1
+            fi
+            touch "$out"
+          '';
+
           checks.tray-library = pkgs.runCommand "steam-arm64-tray-library" { } ''
             rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-arm64-fhs-fhsenv-rootfs' \
               ${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs | head -1)
