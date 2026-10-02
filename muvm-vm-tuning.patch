@@ -1,6 +1,6 @@
 --- a/crates/muvm/src/guest/bin/muvm-guest.rs
 +++ b/crates/muvm/src/guest/bin/muvm-guest.rs
-@@ -64,6 +64,13 @@
+@@ -64,6 +64,20 @@
          setrlimit(Resource::Nofile, rlim).context("Failed to raise `RLIMIT_NOFILE`")?;
      }
  
@@ -8,8 +8,15 @@
 +    // vm.max_map_count; and FEX child processes reserve large virtual regions
 +    // that the default heuristic overcommit rejects with ENOMEM. Raise both,
 +    // as Steam Deck does.
-+    let _ = fs::write("/proc/sys/vm/max_map_count", b"1048576");
-+    let _ = fs::write("/proc/sys/vm/overcommit_memory", b"1");
++    const FEX_MAP_HEAVY_CLIENTS: [(&str, &str); 2] = [
++        ("/proc/sys/vm/max_map_count", "1048576"),
++        ("/proc/sys/vm/overcommit_memory", "1"),
++    ];
++    for (path, value) in FEX_MAP_HEAVY_CLIENTS {
++        if let Err(err) = fs::write(path, value) {
++            eprintln!("muvm-guest: failed to write {value} to {path}: {err}");
++        }
++    }
 +
      if let Err(err) = mount_filesystems(options.merged_rootfs) {
          return Err(err).context("Failed to mount filesystems, bailing out");
