@@ -64,6 +64,23 @@ the library, when the loader cannot find one, when a library taken from
 Valve's runtime is no longer needed, and when the loader would serve one of
 those from anywhere but Valve's runtime. Each client or runtime update runs it.
 
+## Running without the microVM
+
+By default the launcher starts the client inside a muvm microVM, because
+Valve's binaries need 4K pages and Asahi Linux hosts use 16K. On a host whose
+kernel already uses 4K pages, or one without `/dev/kvm`, turn the microVM off:
+
+```nix
+pkgs.steam-arm64.override { useMuvm = false; }
+```
+
+The client then runs straight in its FHS sandbox, and muvm and the FEX rootfs
+are not built. The cost: x86 Linux games and x86 Proton need the FEX rootfs and
+binfmt handler that only the microVM sets up, so they are unavailable in this
+mode. Native aarch64 games and Proton (ARM64) do not depend on them.
+`steam-arm64 --doctor` still reports the x86 checks, and they fail here.
+`steam-x86` always uses the microVM.
+
 ## Channels
 
 `steam-arm64` pins Valve's stable manifest and leaves the client on stable.

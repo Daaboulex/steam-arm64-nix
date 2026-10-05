@@ -28,7 +28,8 @@ system_bus="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/system_bus"
 if [ -S "$system_bus" ] && DBUS_SYSTEM_BUS_ADDRESS="unix:path=$system_bus" dbus-send --system \
   --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames >/dev/null 2>&1; then
   export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$system_bus"
-else
+elif ! dbus-send --system --print-reply --dest=org.freedesktop.DBus \
+  / org.freedesktop.DBus.ListNames >/dev/null 2>&1; then
   echo "steam-arm64: the host's system bus is not reachable from the guest; Steam cannot read the network state" >&2
 fi
 

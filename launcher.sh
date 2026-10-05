@@ -50,6 +50,28 @@ if [ -z "${XCURSOR_THEME:-}" ]; then
   fi
 fi
 
+# Without the microVM (useMuvm = false in launcher.nix) the client runs straight
+# in the FHS sandbox on the host. That is the right choice on a machine whose
+# kernel already uses 4K pages, which Valve's binaries need, and it is the only
+# choice where there is no /dev/kvm. x86 games and x86 Proton are not available
+# in this mode: they need the FEX rootfs and the binfmt handler that only the
+# microVM sets up.
+if [ "@useMuvm@" != 1 ]; then
+  export STEAM_ARM64_ROOT="$steam_root"
+  # Valve exits 42 to ask for a restart, which is how the client hands control
+  # back after it updates itself.
+  while :; do
+    set +o errexit
+    "@fhs@/bin/steam-arm64-fhs" "$@"
+    status=$?
+    set -o errexit
+    if [ "$status" -ne 42 ]; then
+      exit "$status"
+    fi
+    echo "steam-arm64: Steam asked to restart" >&2
+  done
+fi
+
 # muvm gives the guest its own environment, so what it must inherit is named here.
 # Valve's FEX compatibility tool, which the client puts in front of every x86
 # tool and game, takes its x86 Mesa from the graphics provider named here; the

@@ -13,6 +13,10 @@
   steam-arm64-fhs,
   steam-x86-rootfs,
   channel,
+  # Run the client inside a muvm microVM. Needed where the host kernel does not
+  # use 4K pages (Asahi Linux); turn it off on a 4K-page host or one without
+  # /dev/kvm, where the client runs directly in its FHS sandbox.
+  useMuvm ? true,
 }:
 let
   fexInterpreter = runCommand "fex-interpreter" { } ''
@@ -44,7 +48,9 @@ in
 runCommand ("steam-arm64" + lib.optionalString (channel != "stable") "-beta")
   {
     meta = {
-      description = "Valve's aarch64 Steam client, launched in the 4K-page guest its binaries need";
+      description =
+        "Valve's aarch64 Steam client"
+        + (if useMuvm then ", launched in the 4K-page guest its binaries need" else ", launched directly in its FHS sandbox");
       license = lib.licenses.unfree;
       platforms = [ "aarch64-linux" ];
       mainProgram = "steam-arm64";
@@ -54,19 +60,21 @@ runCommand ("steam-arm64" + lib.optionalString (channel != "stable") "-beta")
     install -Dm755 ${
       replaceVars ./launcher.sh {
         client = "${steam-arm64-client}";
-        muvm = lib.getExe muvm;
+        useMuvm = if useMuvm then "1" else "0";
+        # Left empty without the microVM, so none of them enter the closure.
+        muvm = lib.optionalString useMuvm (lib.getExe muvm);
+        flock = lib.optionalString useMuvm (lib.getExe' util-linux "flock");
+        fexbin = lib.optionalString useMuvm "${fexInterpreter}/bin";
+        rootfs = lib.optionalString useMuvm "${steam-x86-rootfs}";
         xrdb = lib.getExe' xrdb "xrdb";
-        flock = lib.getExe' util-linux "flock";
-        fexbin = "${fexInterpreter}/bin";
         fhs = "${steam-arm64-fhs}";
-        rootfs = "${steam-x86-rootfs}";
         inherit channel;
       }
     } "$out/bin/steam-arm64"
 
     ln -s "$out/bin/steam-arm64" "$out/bin/steam"
 
-    test -s ${steam-x86-rootfs}
+    ${lib.optionalString useMuvm "test -s ${steam-x86-rootfs}"}
 
     ${gnutar}/bin/tar -xzf ${launcherTarball} --strip-components=1 steam-launcher/icons
     for size in 16 24 32 48 256; do
