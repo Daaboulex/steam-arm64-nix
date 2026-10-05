@@ -74,12 +74,23 @@ kernel already uses 4K pages, or one without `/dev/kvm`, turn the microVM off:
 pkgs.steam-arm64.override { useMuvm = false; }
 ```
 
-The client then runs straight in its FHS sandbox, and muvm and the FEX rootfs
-are not built. The cost: x86 Linux games and x86 Proton need the FEX rootfs and
-binfmt handler that only the microVM sets up, so they are unavailable in this
-mode. Native aarch64 games and Proton (ARM64) do not depend on them.
-`steam-arm64 --doctor` still reports the x86 checks, and they fail here.
-`steam-x86` always uses the microVM.
+The client then runs straight in its FHS sandbox and muvm is not built. x86
+Linux games and x86 Proton need the FEX rootfs and an x86 binfmt handler, which
+the microVM sets up itself, so on the host the NixOS module provides them:
+
+```nix
+{
+  imports = [ inputs.steam-arm64-nix.nixosModules.fex-host ];
+  programs.steam-arm64.fexHost.enable = true;
+}
+```
+
+It mounts the rootfs image at `/run/fex-emu/rootfs` and registers FEX for
+x86-64 and i386 binaries, so it needs a kernel with `CONFIG_EROFS_FS` and
+`CONFIG_BINFMT_MISC`. The launcher names the graphics provider and the rootfs
+when it finds the mount. `steam-arm64 --doctor` reports what is missing.
+Without the module, native aarch64 games and Proton (ARM64) still work, and
+x86 titles do not. `steam-x86` always uses the microVM.
 
 ## Channels
 

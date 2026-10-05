@@ -53,11 +53,19 @@ fi
 # Without the microVM (useMuvm = false in launcher.nix) the client runs straight
 # in the FHS sandbox on the host. That is the right choice on a machine whose
 # kernel already uses 4K pages, which Valve's binaries need, and it is the only
-# choice where there is no /dev/kvm. x86 games and x86 Proton are not available
-# in this mode: they need the FEX rootfs and the binfmt handler that only the
-# microVM sets up.
+# choice where there is no /dev/kvm.
+#
+# x86 games and x86 Proton need the FEX rootfs and an x86 binfmt handler, which
+# the microVM sets up itself. Here the host has to provide them: the NixOS
+# module nixosModules.fex-host mounts the rootfs at /run/fex-emu/rootfs and
+# registers the handler. When the rootfs is there, name the graphics provider
+# for Valve's FEX tool, and the rootfs for FEX itself.
 if [ "@useMuvm@" != 1 ]; then
   export STEAM_ARM64_ROOT="$steam_root"
+  if [ -f /run/fex-emu/rootfs/graphics_provider.json ]; then
+    export STEAM_COMPAT_GRAPHICS_PROVIDER=/run/fex-emu/rootfs/graphics_provider.json
+    export FEX_ROOTFS=/run/fex-emu/rootfs
+  fi
   # Valve exits 42 to ask for a restart, which is how the client hands control
   # back after it updates itself.
   while :; do

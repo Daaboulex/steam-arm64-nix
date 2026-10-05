@@ -509,6 +509,8 @@
           '';
         };
 
+      flake.nixosModules.fex-host = import ./fex-host.nix;
+
       flake.overlays.default = final: prev: {
         muvm = final.callPackage ./muvm-patched.nix { inherit (prev) muvm; };
         steam-arm64-client = final.callPackage ./package.nix { channel = "stable"; };
