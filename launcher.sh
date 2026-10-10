@@ -17,6 +17,39 @@ if [ ! -x "$steam_root/steamrtarm64/steam" ]; then
 fi
 
 mkdir -p -- "$HOME/.steam" "$steam_root/package"
+
+# -clientbeta names the channel the client should run, and it exits 42 over and
+# over when package/beta, which records the channel it is installed from, says
+# otherwise. So when the arguments name one, record it. Without the flag the
+# file is left to the client, whose own settings switch the channel.
+channel_wanted=
+previous=
+for arg in "$@"; do
+  if [ "$previous" = -clientbeta ]; then
+    channel_wanted=$arg
+  fi
+  previous=$arg
+done
+if [ -n "$channel_wanted" ] && [ "$(cat -- "$steam_root/package/beta" 2>/dev/null || true)" != "$channel_wanted" ]; then
+  printf '%s\n' "$channel_wanted" >"$steam_root/package/beta"
+fi
+
+# Valve exits 42 to ask for a restart, which is how the client hands control
+# back after it updates itself. Run it again, but give up when it asks five
+# times in a row without staying up for a minute: that is a loop, not an update.
+restarts=0
+started=0
+restart_allowed() {
+  if [ $((SECONDS - started)) -ge 60 ]; then
+    restarts=0
+  fi
+  restarts=$((restarts + 1))
+  if [ "$restarts" -gt 5 ]; then
+    echo "steam-arm64: Steam asked to restart more than 5 times in a row; giving up" >&2
+    return 1
+  fi
+  echo "steam-arm64: Steam asked to restart" >&2
+}
 ln -sfn -- "$steam_root" "$HOME/.steam/root"
 ln -sfn -- "$steam_root" "$HOME/.steam/steam"
 ln -sfn -- "$steam_root/linuxarm64" "$HOME/.steam/sdkarm64"
@@ -66,9 +99,8 @@ if [ "@useMuvm@" != 1 ]; then
     export STEAM_COMPAT_GRAPHICS_PROVIDER=/run/fex-emu/rootfs/graphics_provider.json
     export FEX_ROOTFS=/run/fex-emu/rootfs
   fi
-  # Valve exits 42 to ask for a restart, which is how the client hands control
-  # back after it updates itself.
   while :; do
+    started=$SECONDS
     set +o errexit
     "@fhs@/bin/steam-arm64-fhs" "$@"
     status=$?
@@ -76,7 +108,7 @@ if [ "@useMuvm@" != 1 ]; then
     if [ "$status" -ne 42 ]; then
       exit "$status"
     fi
-    echo "steam-arm64: Steam asked to restart" >&2
+    restart_allowed || exit "$status"
   done
 fi
 
@@ -108,9 +140,8 @@ if [ ! -t 0 ] && { [ -c /dev/stdin ] || [ -f /dev/stdin ]; }; then
   exec < <(:)
 fi
 
-# Valve exits 42 to ask for a restart, which is how the client hands control
-# back after it updates itself.
 while :; do
+  started=$SECONDS
   # A guest numbers its processes from one, so the pid file the last client
   # left names a live process in the next guest and the client exits believing
   # it is already running. With no guest holding muvm's lock the file is stale.
@@ -135,5 +166,5 @@ while :; do
   if [ "$status" -ne 42 ]; then
     exit "$status"
   fi
-  echo "steam-arm64: Steam asked to restart" >&2
+  restart_allowed || exit "$status"
 done

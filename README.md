@@ -101,6 +101,22 @@ client owns that file: its own settings switch the channel, and the launcher
 never rewrites it. Both clients in the shared root read the same file, so the
 x86 client follows the same channel.
 
+### Deck mode
+
+Started with `-steamos3 -steampal -steamdeck -clientbeta steamdeck_publicbeta`
+(after `-gamepadui`), the client shows the Deck settings pages, Wi-Fi and
+Bluetooth among them. It calls a few SteamOS helper scripts by path, so the FHS
+sandbox carries stand-ins for them under `/usr/bin` (`steamos-stubs.nix`): each
+answers "nothing to do", and the Wi-Fi backend stays whatever the host runs.
+The host still has to provide NetworkManager and BlueZ and let the session
+user use them.
+
+`-clientbeta` and `package/beta` must name the same channel or the client keeps
+exiting 42. When the arguments carry `-clientbeta`, the launcher writes that
+channel to `package/beta` before starting; without it the file stays the
+client's. The launcher also stops after five restart requests in a row that
+each lasted under a minute, instead of looping forever.
+
 ## Usage
 
 The package is the unpacked client tree; its entry point is `steamrtarm64/steam`.

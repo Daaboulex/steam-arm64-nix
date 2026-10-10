@@ -503,6 +503,27 @@
             touch "$out"
           '';
 
+          checks.steamos-stubs = pkgs.runCommand "steam-arm64-steamos-stubs" { } ''
+            rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-arm64-fhs-fhsenv-rootfs' \
+              ${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs | head -1)
+            test -n "$rootfs"
+            for h in steamos-update steamos-select-branch steamos-wifi-set-backend \
+              steamos-polkit-helpers/steamos-priv-write \
+              steamos-polkit-helpers/steamos-set-timezone; do
+              test -x "$rootfs/usr/bin/$h" || {
+                echo "the FHS has no /usr/bin/$h, which the client calls in Deck mode"
+                exit 1
+              }
+            done
+            set +e
+            "$rootfs/usr/bin/steamos-update"
+            test $? -eq 7 || {
+              echo "steamos-update must exit 7 (no update available)"
+              exit 1
+            }
+            touch "$out"
+          '';
+
           checks.client-tree = pkgs.runCommand "steam-arm64-client-tree" { } ''
             test -d ${self'.packages.default}/steamrtarm64/libs
             touch "$out"
