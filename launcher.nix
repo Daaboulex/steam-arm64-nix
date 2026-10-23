@@ -64,6 +64,8 @@ runCommand ("steam-arm64" + lib.optionalString (channel != "stable") "-beta")
       }
     } "$out/bin/steam-arm64"
 
+    ln -s "$out/bin/steam-arm64" "$out/bin/steam"
+
     test -s ${steam-x86-rootfs}
 
     ${gnutar}/bin/tar -xzf ${launcherTarball} --strip-components=1 steam-launcher/icons

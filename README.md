@@ -137,13 +137,13 @@ its evidence: a Steam log under `logs/`, a launch log, or a probe of the guest.
 | Workshop | works | works | `workshop_log.txt` subscription updates |
 | Shader pre-caching | works | works | `shader_log.txt` writes the hit cache for the M1 GPU |
 | Windows games | works: Proton 11.0 (ARM64), Proton Experimental (ARM64), GE-Proton aarch64, Proton-CachyOS arm64 | works: Proton 10.0, Experimental, Hotfix | a game ran under GE-Proton11-7; `compat_log.txt` registrations |
-| x86 Linux games | wired: Valve's FEX tool, Runtime 4.0 arm64, the rootfs Mesa; no title exercised yet | works, FEX with Runtime sniper | `steam-arm64 --doctor`; the x86 client's own runs |
+| x86 Linux games | works: Valve's FEX tool, Runtime 4.0 arm64, the rootfs Mesa; Running games with OpenGL work but you need a workaround to run games with Vulkan because Fex unsets Vulkan in environment variables for games | works, FEX with Runtime sniper | set this in launch options in steam to get Vulkan working  `env -u VK_DRIVER_FILES -u LIBGL_DRIVERS_PATH -u __EGL_VENDOR_LIBRARY_DIRS -u LIBVA_DRIVERS_PATH -u VDPAU_DRIVER_PATH -u XDG_DATA_DIRS %command%` this is only needed for games that use Valve's FEX, setting this for AArch64 native games or Proton is not needed |
 | aarch64 Linux games | native | not possible | by construction |
 | Gamepads | works through muvm's hidpipe, always on: host joysticks recreated by uinput in the guest, rumble included; no hidraw, since the guest kernel has no HID stack, so gyro, touchpad, lightbar and Steam Input's HID drivers are missing (AsahiLinux/muvm#244) | same | `controller.txt`: a DualSense opened in the native client; muvm `hidpipe_server.rs`; libkrunfw's aarch64 config; a guest lists no `/dev/hidraw` |
 | Remote Play, Steam Link, LAN transfer | the guest cannot announce itself: passt opens its sockets without broadcast and gives link-local multicast no scope, so the client's UDP broadcast to 27036 and its IPv6 multicast never leave (passt bug 163, open). Both launchers publish UDP 27031 and 27036 and TCP 27036 and 27037, so a LAN device's discovery and stream reach the guest through the host's bound sockets; untested with a device. Pairing by PIN and the same-account host list go through Steam's servers and need no broadcast | same | every launch log; `remote_connections.txt`; passt `udp_flow.c`, `util.c`, `pif.c` |
 | In-game overlay | libraries present for aarch64 and, for FEX games, x86-64; attachment under FEX unverified | present | `steamrtarm64/` and `ubuntu12_64/` |
 | Game Recording | present, unverified: the logs show it declining a game it is disabled for | same | `console-linux.txt` |
-| Big Picture | unverified; one report of the Quick Access Menu freezing the ARM64 client's UI (steam-for-linux#13544, closed unplanned) | unverified | no run yet |
+| Big Picture | works | unverified | no run yet for steam 64-bit |
 | Audio | works | works | the guest sees `pipewire-0`; `steamui_audio.txt` lists sinks |
 | Voice chat, microphone | unverified | unverified | no run yet |
 | Screenshots | unverified | unverified | needs the overlay |
