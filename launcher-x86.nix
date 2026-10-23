@@ -2,7 +2,7 @@
   lib,
   runCommand,
   replaceVars,
-  fetchurl,
+  steam-unwrapped,
   gnutar,
   makeDesktopItem,
   xrdb,
@@ -20,10 +20,6 @@ let
     ln -s ${fex}/bin/FEX "$out/bin/FEXInterpreter"
     test -x "$out/bin/FEXInterpreter"
   '';
-  launcherTarball = fetchurl {
-    url = "https://repo.steampowered.com/steam/archive/stable/steam_1.0.0.87.tar.gz";
-    hash = "sha256-ZJN10vk3f4AJqvPi/wmXgEHrkRSJfZxaOIbx2C4nuh8=";
-  };
   desktopItem = makeDesktopItem {
     name = "steam-x86";
     desktopName = "Steam (x86)";
@@ -63,7 +59,7 @@ runCommand "steam-x86"
     test -e ${fex-emulator-x86}/emulator.json
     test -x ${steam-x86-fhs}/bin/steam-x86-fhs
 
-    ${gnutar}/bin/tar -xzf ${launcherTarball} --strip-components=1 steam-launcher/icons
+    ${gnutar}/bin/tar -xzf ${steam-unwrapped.src} --strip-components=1 steam-launcher/icons
     for size in 16 24 32 48 256; do
       install -Dm644 "icons/$size/steam.png" \
         "$out/share/icons/hicolor/''${size}x''${size}/apps/steam-x86.png"

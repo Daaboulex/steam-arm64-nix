@@ -49,10 +49,10 @@ runCommand "fex-emulator-x86"
     mkdir -p "$out/bin" "$out/lib"
     cp -L ${fex}/bin/FEX "$out/bin/FEX"
     for b in FEXGetConfig FEXServer FEXBash FEXpidof FEXConfig FEXRootFSFetcher; do
-      cp -L ${fex}/bin/$b "$out/bin/$b" 2>/dev/null || true
+      cp -L ${fex}/bin/$b "$out/bin/$b"
     done
     ln -s FEX "$out/bin/FEXInterpreter"
-    cp -aL ${fex}/share "$out/share" 2>/dev/null || true
+    cp -aL ${fex}/share "$out/share"
 
     loader=$(patchelf --print-interpreter ${fex}/bin/FEX)
     lname=$(basename "$loader")
@@ -61,31 +61,28 @@ runCommand "fex-emulator-x86"
     collect() {
       for f in "$@"; do
         [ -L "$f" ] && continue
-        ldd "$f" 2>/dev/null | { grep -oE '/nix/store/[^ ()]+\.so[^ ()]*' || true; }
+        ldd "$f" | { grep -oE '/nix/store/[^ ()]+\.so[^ ()]*' || [ $? -eq 1 ]; }
       done
     }
-    collect "$out"/bin/* | sort -u | while read -r lib; do
-      cp -Ln "$lib" "$out/lib/" 2>/dev/null || true
-    done
-    collect "$out"/lib/*.so* | sort -u | while read -r lib; do
-      cp -Ln "$lib" "$out/lib/" 2>/dev/null || true
-    done
-    collect "$out"/lib/*.so* | sort -u | while read -r lib; do
-      cp -Ln "$lib" "$out/lib/" 2>/dev/null || true
-    done
+    bundle() {
+      while read -r lib; do
+        [ -e "$out/lib/$(basename "$lib")" ] || cp -L "$lib" "$out/lib/"
+      done
+    }
+    collect "$out"/bin/* | sort -u | bundle
+    collect "$out"/lib/*.so* | sort -u | bundle
+    collect "$out"/lib/*.so* | sort -u | bundle
 
     chmod -R u+w "$out"
     for f in "$out"/bin/FEX "$out"/bin/FEXGetConfig "$out"/bin/FEXServer "$out"/bin/FEXBash "$out"/bin/FEXpidof "$out"/bin/FEXConfig "$out"/bin/FEXRootFSFetcher; do
-      [ -f "$f" ] || continue
-      patchelf --set-interpreter "$out/lib/$lname" --set-rpath "$out/lib" "$f" 2>/dev/null || true
+      patchelf --set-interpreter "$out/lib/$lname" --set-rpath "$out/lib" "$f"
     done
     for l in "$out"/lib/*.so*; do
       case "$l" in *"/$lname") continue ;; esac
-      patchelf --set-rpath "$out/lib" "$l" 2>/dev/null || true
+      patchelf --set-rpath "$out/lib" "$l"
     done
 
     mkdir -p "$out/share/fex-emu/AppConfig"
     printf '%s' "$webhelperConfig" > "$out/share/fex-emu/AppConfig/steamwebhelper.json"
     printf '%s' "$manifest" > "$out/emulator.json"
-    true
   ''
