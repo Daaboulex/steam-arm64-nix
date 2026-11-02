@@ -25,9 +25,13 @@
       perSystem =
         { system, self', ... }:
         let
+          consumerConfig = {
+            allowUnfree = true;
+            problems.handlers."gtk+".broken = "warn";
+          };
           pkgs = import inputs.nixpkgs {
             inherit system;
-            config.allowUnfree = true;
+            config = consumerConfig;
           };
         in
         {
@@ -176,7 +180,7 @@
             let
               overlaid = import inputs.nixpkgs {
                 inherit system;
-                config.allowUnfree = true;
+                config = consumerConfig;
                 overlays = [ inputs.self.overlays.default ];
               };
             in

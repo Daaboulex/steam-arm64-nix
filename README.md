@@ -44,7 +44,11 @@ microVM, in the FHS layout pressure-vessel needs so its webhelper renders.
 Then take `overlays.default`, which provides the launchers `steam-arm64` and
 `steam-arm64-beta`, the client trees `steam-arm64-client` and
 `steam-arm64-client-beta` behind them, and `steam-x86`. The client is unfree, so
-the consumer sets `nixpkgs.config.allowUnfree = true`.
+the consumer sets `nixpkgs.config.allowUnfree = true`. Its `steamui.so` and
+`vgui2_s.so` link GTK 2, which nixpkgs marks broken ahead of removing it in
+27.05, so the consumer also sets
+`nixpkgs.config.problems.handlers."gtk+".broken = "warn"`. The warning then
+shows on every build until Valve's client moves off GTK 2.
 
 ## Channels
 
