@@ -99,7 +99,11 @@ if [ "${1:-}" = "--doctor" ]; then
   check "audio server socket shared into the guest" test -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pipewire-0"
   check "aarch64 overlay library installed" test -f "$steam_root/steamrtarm64/gameoverlayrenderer.so"
   check "x86-64 overlay library for FEX games installed" test -f "$steam_root/ubuntu12_64/gameoverlayrenderer.so"
-  gamepads=$(find /dev/input -maxdepth 1 -name 'event*' 2>/dev/null | wc -l)
+  if [ -d /dev/input ]; then
+    gamepads=$(find /dev/input -maxdepth 1 -name 'event*' | wc -l)
+  else
+    gamepads=0
+  fi
   printf 'info  gamepads forwarded by muvm into the guest: %s (attach one on the host and it appears here)\n' "$gamepads"
   if grep -q binder /proc/filesystems 2>/dev/null; then
     printf 'info  guest kernel offers binder, the Android layer could be tried\n'
