@@ -57,8 +57,12 @@ libraries and its bzip2 out of the pinned runtime, so nothing depends on
 nixpkgs' `gtk2`, and each runtime update brings Valve's build along. The FHS
 gives that package priority, so where nixpkgs ships a file of the same name,
 Valve's library is the one the loader finds.
-`checks.client-libraries-resolve` reads every library the pinned client asks for
-and fails, naming it, when the FHS does not carry one.
+`checks.client-libraries-resolve` reads every library the pinned client and
+Valve's libraries ask for and looks each one up the way the FHS's loader does,
+in an index `ldconfig` builds from the FHS, keyed by soname. It fails, naming
+the library, when the loader cannot find one, when a library taken from
+Valve's runtime is no longer needed, and when the loader would serve one of
+those from anywhere but Valve's runtime. Each client or runtime update runs it.
 
 ## Channels
 

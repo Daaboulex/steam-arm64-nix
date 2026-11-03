@@ -167,30 +167,33 @@
             touch "$out"
           '';
 
-          checks.tray-library = pkgs.runCommand "steam-arm64-tray-library" { } ''
-            rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-arm64-fhs-fhsenv-rootfs' \
-              ${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs | head -1)
-            test -n "$rootfs"
-            test -e "$rootfs/usr/lib64/libappindicator.so.1"
-            touch "$out"
-          '';
-
           checks.client-libraries-resolve =
+            let
+              client = self'.packages.default;
+              runtimeLibs = self'.packages.steam-runtime-arm64-libs;
+            in
             pkgs.runCommand "steam-arm64-client-libraries-resolve"
-              { nativeBuildInputs = [ pkgs.binutils-unwrapped ]; }
+              {
+                nativeBuildInputs = [
+                  pkgs.binutils-unwrapped
+                  pkgs.glibc.bin
+                ];
+              }
               ''
                 rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-arm64-fhs-fhsenv-rootfs' \
                   ${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs | head -1)
                 test -n "$rootfs"
-                printf '%s\n' libappindicator.so.1 > needed
-                : > provided
-                for dir in "$rootfs/usr/lib64" "$rootfs/usr/lib"; do
-                  if [ -d "$dir" ]; then
-                    find -L "$dir" -maxdepth 1 -name '*.so*' -printf '%f\n' >> provided
-                  fi
-                done
-                find ${self'.packages.default} -type f -name '*.so*' -printf '%f\n' >> provided
-                find ${self'.packages.default} -type f \( -name '*.so*' -o -perm -u+x \) > files
+                : > needed
+                if grep -aqF libappindicator.so.1 ${client}/steamrtarm64/steamui.so; then
+                  printf '%s\n' libappindicator.so.1 >> needed
+                fi
+                ldconfig -X -C ld.so.cache -f /dev/null "$rootfs/usr/lib64" "$rootfs/usr/lib"
+                ldconfig -C ld.so.cache -p > cache
+                sed -n 's/^[[:space:]]*\([^[:space:]]*\) (.*=> \(.*\)$/\1 \2/p' cache > index
+                test -s index
+                cut -d' ' -f1 index > provided
+                find ${client} -type f -name '*.so*' -printf '%f\n' >> provided
+                find ${client} -type f \( -name '*.so*' -o -perm -u+x \) > files
                 while IFS= read -r f; do
                   if readelf -h "$f" >/dev/null 2>&1; then
                     readelf -d "$f" > dynamic
@@ -198,16 +201,44 @@
                     sed -n 's/.*Shared library: \[\(.*\)\]/\1/p' dynamic >> needed
                   fi
                 done < files
+                find ${runtimeLibs}/lib -name '*.so*' > runtime-files
+                while IFS= read -r f; do
+                  readelf -d "$f" | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p' >> needed
+                done < runtime-files
                 sort -u needed > needed.sorted
                 sort -u provided > provided.sorted
                 comm -23 needed.sorted provided.sorted > missing
                 if [ -s missing ]; then
-                  echo "Valve's aarch64 client asks for libraries its FHS does not carry:"
+                  echo "Valve's aarch64 client asks for libraries the loader in its FHS cannot find:"
                   cat missing
-                  echo "Add each to fhs.nix from nixpkgs, or to runtime-libs.nix when Valve's runtime ships it."
+                  echo "Add each to fhs.nix from nixpkgs, or to runtime-libs.nix when only Valve's runtime carries that soname."
                   exit 1
                 fi
-                echo "OK: all $(wc -l < needed.sorted) libraries Valve's client asks for resolve in its FHS"
+                status=0
+                for soname in ${pkgs.lib.escapeShellArgs runtimeLibs.sonames}; do
+                  if ! grep -qxF "$soname" needed.sorted; then
+                    echo "runtime-libs.nix carries $soname, which neither the client nor Valve's other libraries need any more: drop it."
+                    status=1
+                    continue
+                  fi
+                  served=$(awk -v s="$soname" '$1 == s { print $2; exit }' index)
+                  if [ -z "$served" ]; then
+                    echo "The FHS loader has no $soname in its index, though runtime-libs.nix carries it."
+                    status=1
+                    continue
+                  fi
+                  case "$(readlink -f "$served")" in
+                  ${runtimeLibs}/* | ${self'.packages.steam-runtime-arm64}/*) ;;
+                  *)
+                    echo "The FHS loader serves $soname from $(readlink -f "$served"), not from Valve's runtime: the priority runtime-libs.nix has in fhs.nix no longer wins."
+                    status=1
+                    ;;
+                  esac
+                done
+                if [ "$status" -ne 0 ]; then
+                  exit 1
+                fi
+                echo "OK: all $(wc -l < needed.sorted) libraries Valve's client asks for resolve in its FHS, and each one taken from Valve's runtime is still needed and served from it"
                 touch "$out"
               '';
 
