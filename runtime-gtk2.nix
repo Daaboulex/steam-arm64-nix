@@ -1,6 +1,7 @@
 {
   lib,
   runCommand,
+  patchelf,
   steam-runtime-arm64,
 }:
 let
@@ -16,6 +17,7 @@ let
 in
 runCommand "steam-runtime-arm64-gtk2-${steam-runtime-arm64.version}"
   {
+    nativeBuildInputs = [ patchelf ];
     meta = {
       description = "The GTK 2 and tray libraries from Valve's aarch64 runtime, which its client links and loads by name";
       license = lib.licenses.unfree;
@@ -33,5 +35,7 @@ runCommand "steam-runtime-arm64-gtk2-${steam-runtime-arm64.version}"
       fi
       ln -s "''${matches[0]}" "$out/lib/$soname"
     done
-    ln -s libayatana-appindicator.so.1 "$out/lib/libappindicator.so.1"
+    cp -L "$out/lib/libayatana-appindicator.so.1" "$out/lib/libappindicator.so.1"
+    chmod u+w "$out/lib/libappindicator.so.1"
+    patchelf --set-soname libappindicator.so.1 "$out/lib/libappindicator.so.1"
   ''
