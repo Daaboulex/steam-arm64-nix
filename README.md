@@ -158,6 +158,7 @@ its evidence: a Steam log under `logs/`, a launch log, or a probe of the guest.
 | Voice chat, microphone | unverified | unverified | no run yet |
 | Screenshots | unverified | unverified | needs the overlay |
 | Tray icon, notifications | works over the bridged session bus | works | the launchers' bus checks |
+| Network status (Big Picture) | the host's NetworkManager over the bridged system bus | same | `steam-arm64 --doctor`, `client_networkmanager.txt` |
 | `steam://` links | works: the native entry owns the scheme | opened by the native client | desktop entries |
 | Hardware survey | partial: the GPU is reported, `lspci` finds no `/proc/bus/pci` | partial | `steamsysinfo.txt` |
 | Android games (Lepton) | not on this machine: the guest kernel has no binder | not possible | a guest's `/proc/filesystems` |

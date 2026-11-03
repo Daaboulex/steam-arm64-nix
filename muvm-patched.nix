@@ -6,5 +6,6 @@ muvm.overrideAttrs (old: {
     ./muvm-vm-tuning.patch
     ./muvm-guest-groups.patch
     ./muvm-guest-dns.patch
+    ./muvm-bridge-system-bus.patch
   ];
 })

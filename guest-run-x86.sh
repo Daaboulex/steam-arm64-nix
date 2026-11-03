@@ -7,9 +7,16 @@ export FEX_ROOTFS=/run/fex-emu/rootfs
 # this names, so without it the profile is shipped and never applied.
 export FEX_APP_CONFIG_LOCATION=@appconfig@
 
-mkdir -p /run/dbus 2>/dev/null || true
-if [ ! -S /run/dbus/system_bus_socket ]; then
-  dbus-daemon --system --fork >/dev/null 2>&1 || true
+system_bus="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/system_bus"
+if [ -S "$system_bus" ] && DBUS_SYSTEM_BUS_ADDRESS="unix:path=$system_bus" dbus-send --system \
+  --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames >/dev/null 2>&1; then
+  export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$system_bus"
+else
+  echo "steam-x86: the host's system bus is not reachable from the guest; Steam cannot read the network state" >&2
+  mkdir -p /run/dbus 2>/dev/null || true
+  if [ ! -S /run/dbus/system_bus_socket ]; then
+    dbus-daemon --system --fork >/dev/null 2>&1 || true
+  fi
 fi
 
 runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"

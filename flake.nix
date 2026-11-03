@@ -92,8 +92,20 @@
               patch -p1 <${./muvm-vm-tuning.patch}
               patch -p1 <${./muvm-guest-groups.patch}
               patch -p1 <${./muvm-guest-dns.patch}
+              patch -p1 <${./muvm-bridge-system-bus.patch}
               touch "$out"
             '';
+
+          checks.muvm-system-bus-divergence = pkgs.runCommand "muvm-system-bus-divergence" { } ''
+            if grep -rq system_bus_socket ${pkgs.muvm.src}/crates/muvm/src; then
+              echo "muvm ${pkgs.muvm.version} now names the system bus socket itself."
+              echo "Read what it does. If the guest reaches the host's system bus, delete"
+              echo "muvm-bridge-system-bus.patch, the DBUS_SYSTEM_BUS_ADDRESS lines in both"
+              echo "guest-run scripts, and this check."
+              exit 1
+            fi
+            touch "$out"
+          '';
 
           checks.muvm-shm-divergence = pkgs.runCommand "muvm-shm-divergence" { } ''
             if grep -q MIT-SHM ${pkgs.muvm.src}/crates/muvm/src/guest/bridge/x11.rs; then

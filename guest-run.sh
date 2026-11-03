@@ -41,6 +41,14 @@ fi
 # StatusNotifierWatcher falls back to an XEmbed icon, and an XEmbed icon has no
 # menu. The host's socket is on the shared filesystem, so try it and prove it
 # answers before trusting it; a bus of our own is the fallback.
+system_bus="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/system_bus"
+if [ -S "$system_bus" ] && DBUS_SYSTEM_BUS_ADDRESS="unix:path=$system_bus" dbus-send --system \
+  --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames >/dev/null 2>&1; then
+  export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$system_bus"
+else
+  echo "steam-arm64: the host's system bus is not reachable from the guest; Steam cannot read the network state" >&2
+fi
+
 if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
   if ! dbus-send --session --print-reply --dest=org.freedesktop.DBus \
     / org.freedesktop.DBus.ListNames >/dev/null 2>&1; then
@@ -81,6 +89,7 @@ if [ "${1:-}" = "--doctor" ]; then
   check "python3 for Valve's FEX tool" command -v python3
   check "cursor theme path handed in" test -n "${XCURSOR_PATH:-}"
   check "session bus answers" dbus-send --session --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames
+  check "host NetworkManager answers on the system bus" dbus-send --system --print-reply --dest=org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.DBus.Properties.Get string:org.freedesktop.NetworkManager string:State
   check "launcher service on PATH" command -v steam-runtime-launcher-service
   check "Valve's FEX tool installed (Steam app 3127680)" test -x "$tools/FEX-Emu/fex-compat-tool"
   check "Valve's FEX tool starts" env STEAM_COMPAT_DATA_PATH=/tmp "$tools/FEX-Emu/fex-compat-tool" --help
