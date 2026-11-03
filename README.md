@@ -133,7 +133,10 @@ client or starting a guest of its own, and reports each thing an x86 game
 needs: the 4K page size, the binfmt handler, the FEX rootfs and the graphics
 provider, python3 for Valve's FEX tool, the cursor path, the session bus, and
 the Steam apps the client must have downloaded (FEX, Steam Linux Runtime 4.0
-arm64, a Proton for ARM64).
+arm64, a Proton for ARM64). It also starts the runtime's vulkaninfo the way
+Steam starts a game, once in Runtime 4.0 arm64 and once through Valve's FEX
+tool in Runtime 2.0, and reports whether each gets the GPU's Vulkan and GL
+drivers.
 
 Extra compatibility tools reach the client through `STEAM_EXTRA_COMPAT_TOOLS_PATHS`,
 the same variable nixpkgs' `programs.steam.extraCompatPackages` sets; both
@@ -155,7 +158,7 @@ its evidence: a Steam log under `logs/`, a launch log, or a probe of the guest.
 | Workshop | works | works | `workshop_log.txt` subscription updates |
 | Shader pre-caching | works | works | `shader_log.txt` writes the hit cache for the M1 GPU |
 | Windows games | works: Proton 11.0 (ARM64), Proton Experimental (ARM64), GE-Proton aarch64, Proton-CachyOS arm64 | works: Proton 10.0, Experimental, Hotfix | a game ran under GE-Proton11-7; `compat_log.txt` registrations |
-| x86 Linux games | works: Valve's FEX tool, Runtime 4.0 arm64, the rootfs Mesa; Running games with OpenGL work but you need a workaround to run games with Vulkan because Fex unsets Vulkan in environment variables for games | works, FEX with Runtime sniper | set this in launch options in steam to get Vulkan working  `env -u VK_DRIVER_FILES -u LIBGL_DRIVERS_PATH -u __EGL_VENDOR_LIBRARY_DIRS -u LIBVA_DRIVERS_PATH -u VDPAU_DRIVER_PATH -u XDG_DATA_DIRS %command%` this is only needed for games that use Valve's FEX, setting this for AArch64 native games or Proton is not needed |
+| x86 Linux games | works: Valve's FEX tool, the runtime the game names, Vulkan and GL from the FEX rootfs's x86 Mesa, no launch option | works, FEX with Runtime sniper | `steam-arm64 --doctor`: an x86-64 game under FEX gets the GPU's Vulkan and GL drivers |
 | aarch64 Linux games | native | not possible | by construction |
 | Gamepads | works through muvm's hidpipe, always on: host joysticks recreated by uinput in the guest, rumble included; no hidraw, since the guest kernel has no HID stack, so gyro, touchpad, lightbar and Steam Input's HID drivers are missing (AsahiLinux/muvm#244) | same | `controller.txt`: a DualSense opened in the native client; muvm `hidpipe_server.rs`; libkrunfw's aarch64 config; a guest lists no `/dev/hidraw` |
 | Remote Play, Steam Link, LAN transfer | the guest cannot announce itself: passt opens its sockets without broadcast and gives link-local multicast no scope, so the client's UDP broadcast to 27036 and its IPv6 multicast never leave (passt bug 163, open). Both launchers publish UDP 27031 and 27036 and TCP 27036 and 27037, so a LAN device's discovery and stream reach the guest through the host's bound sockets; untested with a device. Pairing by PIN and the same-account host list go through Steam's servers and need no broadcast | same | every launch log; `remote_connections.txt`; passt `udp_flow.c`, `util.c`, `pif.c` |

@@ -166,7 +166,6 @@ buildFHSEnv {
     export PATH="${steam-runtime-arm64}/bin:$PATH"
     export FUSERMOUNT_PROG=/usr/bin/fusermount3
     export GTK_IM_MODULE=xim
-    export LIBGL_DRIVERS_PATH=/run/opengl-driver/lib/dri
     export __EGL_VENDOR_LIBRARY_DIRS=/run/opengl-driver/share/glvnd/egl_vendor.d
     export LIBVA_DRIVERS_PATH=/run/opengl-driver/lib/dri
     export VDPAU_DRIVER_PATH=/run/opengl-driver/lib/vdpau

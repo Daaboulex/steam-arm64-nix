@@ -8,23 +8,6 @@ if [ -e /usr/lib64/locale/locale-archive ]; then
   export LOCALE_ARCHIVE=/usr/lib64/locale/locale-archive
 fi
 
-# The loader enumerates every ICD it finds, so the drivers for hardware this
-# machine does not have each fail aloud. Name the ones that can apply instead.
-icd=/run/opengl-driver/share/vulkan/icd.d
-if [ -d "$icd" ]; then
-  drivers=""
-  for f in "$icd"/*.json; do
-    [ -e "$f" ] || continue
-    case "${f##*/}" in
-    radeon_* | intel_* | nouveau_* | panfrost_* | broadcom_* | freedreno_* | powervr_* | dzn_*) continue ;;
-    esac
-    drivers="${drivers:+$drivers:}$f"
-  done
-  if [ -n "$drivers" ]; then
-    export VK_DRIVER_FILES="$drivers"
-  fi
-fi
-
 steam_root="${STEAM_ARM64_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/Steam}"
 
 # muvm keeps one guest per user and a launch into a running guest keeps that
@@ -96,6 +79,30 @@ if [ "${1:-}" = "--doctor" ]; then
   check "Steam Linux Runtime 4.0 arm64 installed (app 4185400)" test -x "$tools/SteamLinuxRuntime_4-arm64/pressure-vessel/bin/pressure-vessel-wrap"
   check "Proton (ARM64) installed" sh -c 'ls -d "$1"/Proton*ARM64*/proton >/dev/null 2>&1' sh "$tools"
   check "GPU render node in the guest" test -e /dev/dri/renderD128
+  game_sees_gpu() {
+    local vulkaninfo=$1 triplet=$2 scratch rc
+    shift 2
+    scratch=$(mktemp -d)
+    STEAM_COMPAT_DATA_PATH="$scratch" STEAM_COMPAT_CLIENT_INSTALL_PATH="$steam_root" "$@" sh -c '
+      summary=$("$1" --summary 2>/dev/null)
+      case "$summary" in
+      *PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU* | *PHYSICAL_DEVICE_TYPE_DISCRETE_GPU*) ;;
+      *) exit 1 ;;
+      esac
+      [ -n "$(ls "/usr/lib/pressure-vessel/overrides/lib/$2/dri")" ] && touch "$3/gpu-reached"
+    ' sh "$vulkaninfo" "$triplet" "$scratch" || true
+    rc=0
+    test -e "$scratch/gpu-reached" || rc=1
+    rm -rf -- "$scratch"
+    return "$rc"
+  }
+  check "an aarch64 game gets the GPU's Vulkan and GL drivers (Runtime 4.0 arm64)" \
+    game_sees_gpu vulkaninfo aarch64-linux-gnu \
+    "$tools/SteamLinuxRuntime_4-arm64/_v2-entry-point" --verb=waitforexitandrun --
+  check "an x86-64 game under FEX gets the GPU's Vulkan and GL drivers (Runtime 2.0)" \
+    game_sees_gpu x86_64-linux-gnu-vulkaninfo x86_64-linux-gnu \
+    "$tools/FEX-Emu/fex-compat-tool" waitforexitandrun -- \
+    "$tools/SteamLinuxRuntime_soldier/_v2-entry-point" --verb=waitforexitandrun --
   check "audio server socket shared into the guest" test -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pipewire-0"
   check "aarch64 overlay library installed" test -f "$steam_root/steamrtarm64/gameoverlayrenderer.so"
   check "x86-64 overlay library for FEX games installed" test -f "$steam_root/ubuntu12_64/gameoverlayrenderer.so"
