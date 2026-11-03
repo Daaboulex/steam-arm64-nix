@@ -49,10 +49,14 @@ Then take `overlays.default`, which provides the launchers `steam-arm64` and
 `steam-arm64-beta`, the client trees `steam-arm64-client` and
 `steam-arm64-client-beta` behind them, and `steam-x86`. The client is unfree, so
 the consumer sets `nixpkgs.config.allowUnfree = true`. Its `steamui.so` and
-`vgui2_s.so` link GTK 2, and its tray loads `libappindicator.so.1`. Both come
-from Valve's own aarch64 runtime: `steam-runtime-arm64-gtk2` takes Valve's GTK 2
-2.24.33 and its Ayatana tray libraries out of the pinned runtime, so nothing
-depends on nixpkgs' `gtk2`, and each runtime update brings Valve's build along.
+`vgui2_s.so` link GTK 2, its tray loads `libappindicator.so.1`, and its
+`libavformat.so.58` links Debian's `libbz2.so.1.0`, a soname nixpkgs' bzip2
+does not carry. All come from Valve's own aarch64 runtime:
+`steam-runtime-arm64-libs` takes Valve's GTK 2 2.24.33, its Ayatana tray
+libraries and its bzip2 out of the pinned runtime, so nothing depends on
+nixpkgs' `gtk2`, and each runtime update brings Valve's build along. The FHS
+gives that package priority, so where nixpkgs ships a file of the same name,
+Valve's library is the one the loader finds.
 `checks.client-libraries-resolve` reads every library the pinned client asks for
 and fails, naming it, when the FHS does not carry one.
 

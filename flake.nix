@@ -38,12 +38,12 @@
           packages.steam-arm64-client-beta = pkgs.callPackage ./package.nix { channel = "publicbeta"; };
           packages.default = self'.packages.steam-arm64-client;
           packages.steam-runtime-arm64 = pkgs.callPackage ./runtime.nix { };
-          packages.steam-runtime-arm64-gtk2 = pkgs.callPackage ./runtime-gtk2.nix {
+          packages.steam-runtime-arm64-libs = pkgs.callPackage ./runtime-libs.nix {
             inherit (self'.packages) steam-runtime-arm64;
           };
           packages.steam-arm64-fhs = pkgs.callPackage ./fhs.nix {
             inherit (self'.packages) steam-runtime-arm64;
-            inherit (self'.packages) steam-runtime-arm64-gtk2;
+            inherit (self'.packages) steam-runtime-arm64-libs;
           };
           packages.steam-x86-rootfs = pkgs.callPackage ./fex-rootfs-x86.nix { };
           packages.fex-emulator-x86 = pkgs.callPackage ./fex-emulator-x86.nix { };
@@ -204,7 +204,7 @@
                 if [ -s missing ]; then
                   echo "Valve's aarch64 client asks for libraries its FHS does not carry:"
                   cat missing
-                  echo "Add each to fhs.nix from nixpkgs, or to runtime-gtk2.nix when Valve's runtime ships it."
+                  echo "Add each to fhs.nix from nixpkgs, or to runtime-libs.nix when Valve's runtime ships it."
                   exit 1
                 fi
                 echo "OK: all $(wc -l < needed.sorted) libraries Valve's client asks for resolve in its FHS"
@@ -483,7 +483,7 @@
         steam-arm64-client = final.callPackage ./package.nix { channel = "stable"; };
         steam-arm64-client-beta = final.callPackage ./package.nix { channel = "publicbeta"; };
         steam-runtime-arm64 = final.callPackage ./runtime.nix { };
-        steam-runtime-arm64-gtk2 = final.callPackage ./runtime-gtk2.nix { };
+        steam-runtime-arm64-libs = final.callPackage ./runtime-libs.nix { };
         steam-arm64-fhs = final.callPackage ./fhs.nix { };
         steam-x86-rootfs = final.callPackage ./fex-rootfs-x86.nix { };
         steam-arm64 = final.callPackage ./launcher.nix { channel = "stable"; };

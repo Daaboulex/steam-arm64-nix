@@ -4,7 +4,7 @@
   replaceVars,
   glibcLocales,
   steam-runtime-arm64,
-  steam-runtime-arm64-gtk2,
+  steam-runtime-arm64-libs,
   runCommand,
 }:
 let
@@ -154,7 +154,7 @@ buildFHSEnv {
       glew
       libbsd
       fuse3
-      steam-runtime-arm64-gtk2
+      (lib.hiPrio steam-runtime-arm64-libs)
 
       ffmpeg_7
       nghttp2

@@ -12,14 +12,15 @@ let
     "libayatana-indicator.so.7"
     "libdbusmenu-glib.so.4"
     "libdbusmenu-gtk.so.4"
+    "libbz2.so.1.0"
   ];
   libDir = "${steam-runtime-arm64}/steamrt3c_platform_${steam-runtime-arm64.version}/files/lib/aarch64-linux-gnu";
 in
-runCommand "steam-runtime-arm64-gtk2-${steam-runtime-arm64.version}"
+runCommand "steam-runtime-arm64-libs-${steam-runtime-arm64.version}"
   {
     nativeBuildInputs = [ patchelf ];
     meta = {
-      description = "The GTK 2 and tray libraries from Valve's aarch64 runtime, which its client links and loads by name";
+      description = "The libraries from Valve's aarch64 runtime that its client links or loads under a Debian soname nixpkgs does not answer to";
       license = lib.licenses.unfree;
       sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
       platforms = [ "aarch64-linux" ];
