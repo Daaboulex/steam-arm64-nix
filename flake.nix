@@ -25,22 +25,22 @@
       perSystem =
         { system, self', ... }:
         let
-          consumerConfig = {
-            allowUnfree = true;
-            problems.handlers."gtk+".broken = "warn";
-          };
           pkgs = import inputs.nixpkgs {
             inherit system;
-            config = consumerConfig;
+            config.allowUnfree = true;
           };
         in
         {
           packages.steam-arm64-client = pkgs.callPackage ./package.nix { channel = "stable"; };
           packages.steam-arm64-client-beta = pkgs.callPackage ./package.nix { channel = "publicbeta"; };
           packages.default = self'.packages.steam-arm64-client;
-          packages.libdbusmenu-gtk2 = pkgs.callPackage ./libdbusmenu-gtk2.nix { };
+          packages.libdbusmenu-gtk2 = pkgs.callPackage ./libdbusmenu-gtk2.nix {
+            inherit (self'.packages) gtk2;
+          };
+          packages.gtk2 = pkgs.callPackage ./gtk-2/package.nix { };
           packages.libappindicator-gtk2 = pkgs.callPackage ./libappindicator-gtk2.nix {
             inherit (self'.packages) libdbusmenu-gtk2;
+            inherit (self'.packages) gtk2;
           };
           packages.steam-runtime-arm64 = pkgs.callPackage ./runtime.nix { };
           packages.steam-arm64-fhs = pkgs.callPackage ./fhs.nix {
@@ -180,7 +180,7 @@
             let
               overlaid = import inputs.nixpkgs {
                 inherit system;
-                config = consumerConfig;
+                config.allowUnfree = true;
                 overlays = [ inputs.self.overlays.default ];
               };
             in
@@ -412,6 +412,7 @@
       flake.overlays.default = final: prev: {
         muvm = final.callPackage ./muvm-patched.nix { inherit (prev) muvm; };
         libdbusmenu-gtk2 = final.callPackage ./libdbusmenu-gtk2.nix { };
+        gtk2 = final.callPackage ./gtk-2/package.nix { };
         libappindicator-gtk2 = final.callPackage ./libappindicator-gtk2.nix { };
         steam-arm64-client = final.callPackage ./package.nix { channel = "stable"; };
         steam-arm64-client-beta = final.callPackage ./package.nix { channel = "publicbeta"; };
