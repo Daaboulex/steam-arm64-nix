@@ -23,7 +23,11 @@ own client manifest.
 ## What Is This?
 
 Two clients. `steam-arm64` is Valve's native aarch64 client, run inside the
-4K-page microVM its binaries need. Windows games go through Valve's Proton
+4K-page microVM its binaries need. On 2026-11-03, 33 of the client's 87 ELF
+files had LOAD segments aligned below 16K (Steam issue 13745, closed as not
+planned), and FEX 2608 aborted on the 16K-page host. `checks.client-needs-4k-pages`
+fails the day a client update brings that count to zero, which is when the
+native client can leave the guest. Windows games go through Valve's Proton
 (ARM64), Wine built as ARM64EC with FEX inside it; x86 Linux games and x86
 Proton go through Valve's own FEX compatibility tool, which the client
 downloads, and which takes its x86 Mesa from the FEX rootfs the launcher mounts.
@@ -45,10 +49,12 @@ Then take `overlays.default`, which provides the launchers `steam-arm64` and
 `steam-arm64-beta`, the client trees `steam-arm64-client` and
 `steam-arm64-client-beta` behind them, and `steam-x86`. The client is unfree, so
 the consumer sets `nixpkgs.config.allowUnfree = true`. Its `steamui.so` and
-`vgui2_s.so` link GTK 2, which nixpkgs marks broken ahead of removing it in
-27.05, so the consumer also sets
-`nixpkgs.config.problems.handlers."gtk+".broken = "warn"`. The warning then
-shows on every build until Valve's client moves off GTK 2.
+`vgui2_s.so` link GTK 2, and its tray loads `libappindicator.so.1`. Both come
+from Valve's own aarch64 runtime: `steam-runtime-arm64-gtk2` takes Valve's GTK 2
+2.24.33 and its Ayatana tray libraries out of the pinned runtime, so nothing
+depends on nixpkgs' `gtk2`, and each runtime update brings Valve's build along.
+`checks.client-libraries-resolve` reads every library the pinned client asks for
+and fails, naming it, when the FHS does not carry one.
 
 ## Channels
 

@@ -4,7 +4,7 @@
   replaceVars,
   glibcLocales,
   steam-runtime-arm64,
-  libappindicator-gtk2,
+  steam-runtime-arm64-gtk2,
   runCommand,
 }:
 let
@@ -53,7 +53,6 @@ buildFHSEnv {
       libasyncns
       bzip2
       glib
-      gtk2
       ibus
       libogg
       libvorbis
@@ -155,7 +154,7 @@ buildFHSEnv {
       glew
       libbsd
       fuse3
-      libappindicator-gtk2
+      steam-runtime-arm64-gtk2
 
       ffmpeg_7
       nghttp2

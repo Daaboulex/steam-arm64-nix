@@ -27,7 +27,6 @@
         let
           consumerConfig = {
             allowUnfree = true;
-            problems.handlers."gtk+".broken = "warn";
           };
           pkgs = import inputs.nixpkgs {
             inherit system;
@@ -38,14 +37,13 @@
           packages.steam-arm64-client = pkgs.callPackage ./package.nix { channel = "stable"; };
           packages.steam-arm64-client-beta = pkgs.callPackage ./package.nix { channel = "publicbeta"; };
           packages.default = self'.packages.steam-arm64-client;
-          packages.libdbusmenu-gtk2 = pkgs.callPackage ./libdbusmenu-gtk2.nix { };
-          packages.libappindicator-gtk2 = pkgs.callPackage ./libappindicator-gtk2.nix {
-            inherit (self'.packages) libdbusmenu-gtk2;
-          };
           packages.steam-runtime-arm64 = pkgs.callPackage ./runtime.nix { };
+          packages.steam-runtime-arm64-gtk2 = pkgs.callPackage ./runtime-gtk2.nix {
+            inherit (self'.packages) steam-runtime-arm64;
+          };
           packages.steam-arm64-fhs = pkgs.callPackage ./fhs.nix {
             inherit (self'.packages) steam-runtime-arm64;
-            inherit (self'.packages) libappindicator-gtk2;
+            inherit (self'.packages) steam-runtime-arm64-gtk2;
           };
           packages.steam-x86-rootfs = pkgs.callPackage ./fex-rootfs-x86.nix { };
           packages.fex-emulator-x86 = pkgs.callPackage ./fex-emulator-x86.nix { };
@@ -164,6 +162,65 @@
             test -e "$rootfs/usr/lib64/libappindicator.so.1"
             touch "$out"
           '';
+
+          checks.client-libraries-resolve =
+            pkgs.runCommand "steam-arm64-client-libraries-resolve"
+              { nativeBuildInputs = [ pkgs.binutils-unwrapped ]; }
+              ''
+                rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-arm64-fhs-fhsenv-rootfs' \
+                  ${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs | head -1)
+                test -n "$rootfs"
+                printf '%s\n' libappindicator.so.1 > needed
+                : > provided
+                for dir in "$rootfs/usr/lib64" "$rootfs/usr/lib"; do
+                  if [ -d "$dir" ]; then
+                    find -L "$dir" -maxdepth 1 -name '*.so*' -printf '%f\n' >> provided
+                  fi
+                done
+                find ${self'.packages.default} -type f -name '*.so*' -printf '%f\n' >> provided
+                find ${self'.packages.default} -type f \( -name '*.so*' -o -perm -u+x \) > files
+                while IFS= read -r f; do
+                  if readelf -h "$f" >/dev/null 2>&1; then
+                    readelf -d "$f" > dynamic
+                    sed -n 's/.*Library soname: \[\(.*\)\]/\1/p' dynamic >> provided
+                    sed -n 's/.*Shared library: \[\(.*\)\]/\1/p' dynamic >> needed
+                  fi
+                done < files
+                sort -u needed > needed.sorted
+                sort -u provided > provided.sorted
+                comm -23 needed.sorted provided.sorted > missing
+                if [ -s missing ]; then
+                  echo "Valve's aarch64 client asks for libraries its FHS does not carry:"
+                  cat missing
+                  echo "Add each to fhs.nix from nixpkgs, or to runtime-gtk2.nix when Valve's runtime ships it."
+                  exit 1
+                fi
+                echo "OK: all $(wc -l < needed.sorted) libraries Valve's client asks for resolve in its FHS"
+                touch "$out"
+              '';
+
+          checks.client-needs-4k-pages =
+            pkgs.runCommand "steam-arm64-client-needs-4k-pages"
+              { nativeBuildInputs = [ pkgs.binutils-unwrapped ]; }
+              ''
+                find ${self'.packages.default} -type f \( -name '*.so*' -o -perm -u+x \) > files
+                count=0
+                while IFS= read -r f; do
+                  if readelf -h "$f" >/dev/null 2>&1; then
+                    readelf -lW "$f" > segments
+                    if awk '$1 == "LOAD" && strtonum($NF) < 16384 { low = 1 } END { exit !low }' segments; then
+                      count=$((count + 1))
+                    fi
+                  fi
+                done < files
+                if [ "$count" -eq 0 ]; then
+                  echo "Every ELF file in Valve's aarch64 client now has LOAD segments aligned to 16K or more, so it loads on a 16K-page kernel."
+                  echo "The native client no longer needs muvm's 4K guest: run it on the host and retire the guest for it."
+                  exit 1
+                fi
+                echo "Valve's aarch64 client still has $count ELF files with LOAD segments aligned below 16K, so it needs muvm's 4K guest"
+                touch "$out"
+              '';
 
           checks.runtime-tools = pkgs.runCommand "steam-arm64-runtime-tools" { } ''
             test -x ${self'.packages.steam-runtime-arm64}/bin/steam-runtime-launcher-service
@@ -411,11 +468,10 @@
 
       flake.overlays.default = final: prev: {
         muvm = final.callPackage ./muvm-patched.nix { inherit (prev) muvm; };
-        libdbusmenu-gtk2 = final.callPackage ./libdbusmenu-gtk2.nix { };
-        libappindicator-gtk2 = final.callPackage ./libappindicator-gtk2.nix { };
         steam-arm64-client = final.callPackage ./package.nix { channel = "stable"; };
         steam-arm64-client-beta = final.callPackage ./package.nix { channel = "publicbeta"; };
         steam-runtime-arm64 = final.callPackage ./runtime.nix { };
+        steam-runtime-arm64-gtk2 = final.callPackage ./runtime-gtk2.nix { };
         steam-arm64-fhs = final.callPackage ./fhs.nix { };
         steam-x86-rootfs = final.callPackage ./fex-rootfs-x86.nix { };
         steam-arm64 = final.callPackage ./launcher.nix { channel = "stable"; };
