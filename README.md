@@ -64,6 +64,34 @@ the library, when the loader cannot find one, when a library taken from
 Valve's runtime is no longer needed, and when the loader would serve one of
 those from anywhere but Valve's runtime. Each client or runtime update runs it.
 
+## Running without the microVM
+
+By default the launcher starts the client inside a muvm microVM, because
+Valve's binaries need 4K pages and Asahi Linux hosts use 16K. On a host whose
+kernel already uses 4K pages, or one without `/dev/kvm`, turn the microVM off:
+
+```nix
+pkgs.steam-arm64.override { useMuvm = false; }
+```
+
+The client then runs straight in its FHS sandbox and muvm is not built. x86
+Linux games and x86 Proton need the FEX rootfs and an x86 binfmt handler, which
+the microVM sets up itself, so on the host the NixOS module provides them:
+
+```nix
+{
+  imports = [ inputs.steam-arm64-nix.nixosModules.fex-host ];
+  programs.steam-arm64.fexHost.enable = true;
+}
+```
+
+It mounts the rootfs image at `/run/fex-emu/rootfs` and registers FEX for
+x86-64 and i386 binaries, so it needs a kernel with `CONFIG_EROFS_FS` and
+`CONFIG_BINFMT_MISC`. The launcher names the graphics provider and the rootfs
+when it finds the mount. `steam-arm64 --doctor` reports what is missing.
+Without the module, native aarch64 games and Proton (ARM64) still work, and
+x86 titles do not. `steam-x86` always uses the microVM.
+
 ## Channels
 
 `steam-arm64` pins Valve's stable manifest and leaves the client on stable.
@@ -72,6 +100,22 @@ the first install, by writing `package/beta` in the Steam root. After that the
 client owns that file: its own settings switch the channel, and the launcher
 never rewrites it. Both clients in the shared root read the same file, so the
 x86 client follows the same channel.
+
+### Deck mode
+
+Started with `-steamos3 -steampal -steamdeck -clientbeta steamdeck_publicbeta`
+(after `-gamepadui`), the client shows the Deck settings pages, Wi-Fi and
+Bluetooth among them. It calls a few SteamOS helper scripts by path, so the FHS
+sandbox carries stand-ins for them under `/usr/bin` (`steamos-stubs.nix`): each
+answers "nothing to do", and the Wi-Fi backend stays whatever the host runs.
+The host still has to provide NetworkManager and BlueZ and let the session
+user use them.
+
+`-clientbeta` and `package/beta` must name the same channel or the client keeps
+exiting 42. When the arguments carry `-clientbeta`, the launcher writes that
+channel to `package/beta` before starting; without it the file stays the
+client's. The launcher also stops after five restart requests in a row that
+each lasted under a minute, instead of looping forever.
 
 ## Usage
 

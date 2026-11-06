@@ -6,6 +6,8 @@
   steam-runtime-arm64,
   steam-runtime-arm64-libs,
   runCommand,
+  linkFarm,
+  writeShellScript,
 }:
 let
   locales = glibcLocales.override {
@@ -15,6 +17,7 @@ let
       "de_DE.UTF-8/UTF-8"
     ];
   };
+  steamosStubs = import ./steamos-stubs.nix { inherit linkFarm writeShellScript; };
   guestRun = runCommand "steam-arm64-guest-run" { } ''
     install -Dm755 ${replaceVars ./guest-run.sh { dbusConf = "${./session-bus.conf}"; }} "$out"
   '';
@@ -159,6 +162,8 @@ buildFHSEnv {
       ffmpeg_7
       nghttp2
       speechd
+
+      steamosStubs
     ];
   profile = ''
     unset GIO_EXTRA_MODULES
