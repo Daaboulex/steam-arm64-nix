@@ -507,6 +507,63 @@
             test -d ${self'.packages.default}/steamrtarm64/libs
             touch "$out"
           '';
+
+          checks.update-reports-the-channel-that-moved = pkgs.runCommand "steam-arm64-update-report" { } ''
+            export GITHUB_OUTPUT="$TMPDIR/out"
+            source ${./scripts/update.sh}
+            pin_client() {
+              local entry
+              entry="''${!1}"
+              cur="''${entry%|*}"
+              case "''${entry##*|}" in
+              same) seen+=("$cur") ;;
+              moved)
+                seen+=("$cur")
+                changed+=("$cur")
+                updated=true
+                ;;
+              fail) return 2 ;;
+              esac
+            }
+            run() {
+              : >"$GITHUB_OUTPUT"
+              set +e
+              (pin_channels "stable publicbeta")
+              status=$?
+              set -e
+            }
+            want() {
+              if [ "$(grep "^$1=" "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)" != "$2" ]; then
+                echo "$3: expected $1=$2"
+                cat "$GITHUB_OUTPUT"
+                exit 1
+              fi
+            }
+
+            stable="steam-arm64-client|100|100|same" publicbeta="steam-arm64-client-beta|200|201|moved" run
+            want package_name steam-arm64-client-beta "only the beta moved"
+            want old_version 200 "only the beta moved"
+            want new_version 201 "only the beta moved"
+            want updated true "only the beta moved"
+
+            stable="steam-arm64-client|100|101|moved" publicbeta="steam-arm64-client-beta|200|201|moved" run
+            want package_name steam-arm64-client "both moved"
+            want old_version "100 (beta 200)" "both moved"
+            want new_version "101 (beta 201)" "both moved"
+
+            stable="steam-arm64-client|100|100|same" publicbeta="steam-arm64-client-beta|200|200|same" run
+            want updated false "nothing moved"
+            want new_version 100 "nothing moved"
+
+            stable="steam-arm64-client|100|100|same" publicbeta="steam-arm64-client-beta|200|201|fail" run
+            if [ "$status" -ne 2 ]; then
+              echo "a failing channel must exit with its own status, 2, not $status"
+              exit 1
+            fi
+            want package_name steam-arm64-client-beta "the beta failed"
+            want updated false "the beta failed"
+            touch "$out"
+          '';
         };
 
       flake.overlays.default = final: prev: {

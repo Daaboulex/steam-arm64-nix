@@ -87,6 +87,48 @@ pin_rootfs() {
   log "rootfs $old -> $url"
 }
 
+report_versions() {
+  local attr old new attr2 old2 new2
+  case "${#changed[@]}" in
+  0) IFS='|' read -r attr old new <<<"${seen[0]}" ;;
+  1) IFS='|' read -r attr old new <<<"${changed[0]}" ;;
+  *)
+    IFS='|' read -r attr old new <<<"${changed[0]}"
+    IFS='|' read -r attr2 old2 new2 <<<"${changed[1]}"
+    old="$old (${attr2#steam-arm64-client-} $old2)"
+    new="$new (${attr2#steam-arm64-client-} $new2)"
+    ;;
+  esac
+  output "package_name" "$attr"
+  output "old_version" "$old"
+  output "new_version" "$new"
+}
+
+pin_channels() {
+  local channel attr old new status
+  seen=()
+  changed=()
+  updated=false
+  for channel in $1; do
+    cur=""
+    pin_client "$channel" || {
+      status=$?
+      if [ -n "$cur" ]; then
+        IFS='|' read -r attr old new <<<"$cur"
+        output "package_name" "$attr"
+        output "old_version" "$old"
+        output "new_version" "$new"
+      fi
+      output "updated" "false"
+      exit "$status"
+    }
+  done
+  report_versions
+  output "updated" "$updated"
+}
+
+[[ ${BASH_SOURCE[0]} == "$0" ]] || return 0
+
 pin_runtime
 pin_rootfs
 
@@ -119,7 +161,7 @@ pin_client() {
   if [ -f "$out" ]; then
     old_version="$(sed -nE 's/^  version = "([0-9]+)";$/\1/p' "$out" | head -1)"
   fi
-  if [ "$channel" = stable ]; then old_versions+=("$old_version"); fi
+  cur="$attr|$old_version|"
 
   if ! curl -fsSL "$BASE_URL/$manifest" -o "$vdf"; then
     err "could not fetch $manifest"
@@ -133,7 +175,7 @@ pin_client() {
     output "error_type" "manifest-shape"
     return 1
   fi
-  if [ "$channel" = stable ]; then new_versions+=("$version"); fi
+  cur="$attr|$old_version|$version"
 
   wanted="$(grep -cE '^[[:blank:]]"[a-z0-9_]+(_all|_linuxarm64_linuxarm64)"$' "$vdf" || true)"
   components="$(awk '
@@ -155,6 +197,7 @@ pin_client() {
 
   if [ "$version" = "$old_version" ]; then
     log "$channel already at $version"
+    seen+=("$cur")
     return 0
   fi
 
@@ -180,19 +223,9 @@ pin_client() {
   fi
 
   log "$channel updated $old_version -> $version ($emitted components)"
+  seen+=("$cur")
+  changed+=("$cur")
   updated=true
 }
 
-old_versions=()
-new_versions=()
-updated=false
-for channel in ${1:-stable publicbeta}; do
-  if ! pin_client "$channel"; then
-    status=$?
-    output "updated" "false"
-    exit "$status"
-  fi
-done
-output "old_version" "${old_versions[0]:-}"
-output "new_version" "${new_versions[0]:-}"
-output "updated" "$updated"
+pin_channels "${1:-stable publicbeta}"
