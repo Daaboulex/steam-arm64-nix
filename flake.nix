@@ -180,9 +180,8 @@
                 ];
               }
               ''
-                rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-arm64-fhs-fhsenv-rootfs' \
-                  ${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs | head -1)
-                test -n "$rootfs"
+                rootfs=${self'.packages.steam-arm64-fhs.fhsenv}
+                test -d "$rootfs"
                 : > needed
                 if grep -aqF libappindicator.so.1 ${client}/steamrtarm64/steamui.so; then
                   printf '%s\n' libappindicator.so.1 >> needed
@@ -268,9 +267,8 @@
           checks.runtime-tools = pkgs.runCommand "steam-arm64-runtime-tools" { } ''
             test -x ${self'.packages.steam-runtime-arm64}/bin/steam-runtime-launcher-service
             test -d ${self'.packages.steam-runtime-arm64}/pressure-vessel
-            rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-arm64-fhs-fhsenv-rootfs' \
-              ${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs | head -1)
-            test -n "$rootfs"
+            rootfs=${self'.packages.steam-arm64-fhs.fhsenv}
+            test -d "$rootfs"
             grep -q '${self'.packages.steam-runtime-arm64}/bin' "$rootfs/etc/profile"
             test -e "$rootfs/usr/bin/fusermount3"
             touch "$out"
@@ -375,9 +373,8 @@
                 echo "the guest's PATH carries no FEXInterpreter, so muvm registers no x86 binfmt"
                 exit 1
               }
-            rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-arm64-fhs-fhsenv-rootfs' \
-              ${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs | head -1)
-            test -n "$rootfs"
+            rootfs=${self'.packages.steam-arm64-fhs.fhsenv}
+            test -d "$rootfs"
             test -x "$rootfs/usr/bin/python3" \
               || {
                 echo "Valve's fex-compat-tool is a python3 script run outside the container;"
@@ -441,9 +438,8 @@
           '';
 
           checks.steam-x86-fhs-coreutils = pkgs.runCommand "steam-x86-fhs-coreutils" { } ''
-            rootfs=$(grep -ao '/nix/store/[a-z0-9]*-steam-x86-fhs-fhsenv-rootfs' \
-              ${self'.packages.steam-x86-fhs}/bin/steam-x86-fhs | head -1)
-            test -n "$rootfs"
+            rootfs=${self'.packages.steam-x86-fhs.fhsenv}
+            test -d "$rootfs"
             test -e "$rootfs/usr/bin/true"
             touch "$out"
           '';
