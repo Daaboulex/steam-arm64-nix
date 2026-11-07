@@ -8,18 +8,13 @@
   xrdb,
   util-linux,
   muvm,
-  fex,
+  fex-interpreter,
   steam-arm64-client,
   steam-arm64-fhs,
   steam-x86-rootfs,
   channel,
 }:
 let
-  fexInterpreter = runCommand "fex-interpreter" { } ''
-    mkdir -p "$out/bin"
-    ln -s ${fex}/bin/FEX "$out/bin/FEXInterpreter"
-    test -x "$out/bin/FEXInterpreter"
-  '';
   # Valve ships the application icons in its desktop launcher tarball, not in
   # the client payload, which carries only tray icons.
   launcherTarball = fetchurl {
@@ -57,7 +52,7 @@ runCommand ("steam-arm64" + lib.optionalString (channel != "stable") "-beta")
         muvm = lib.getExe muvm;
         xrdb = lib.getExe' xrdb "xrdb";
         flock = lib.getExe' util-linux "flock";
-        fexbin = "${fexInterpreter}/bin";
+        fexbin = "${fex-interpreter}/bin";
         fhs = "${steam-arm64-fhs}";
         rootfs = "${steam-x86-rootfs}";
         inherit channel;

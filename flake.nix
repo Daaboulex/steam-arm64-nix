@@ -46,10 +46,11 @@
             inherit (self'.packages) steam-runtime-arm64-libs;
           };
           packages.steam-x86-rootfs = pkgs.callPackage ./fex-rootfs-x86.nix { };
+          packages.fex-interpreter = pkgs.callPackage ./fex-interpreter.nix { };
           packages.fex-emulator-x86 = pkgs.callPackage ./fex-emulator-x86.nix { };
           packages.steam-x86-fhs = pkgs.callPackage ./fhs-x86.nix {
             steam-x86-entry = pkgs.steam-unwrapped;
-            inherit (self'.packages) fex-emulator-x86;
+            inherit (self'.packages) fex-emulator-x86 fex-interpreter;
           };
           packages.steam-x86 = pkgs.callPackage ./launcher-x86.nix {
             muvm = pkgs.callPackage ./muvm-patched.nix { };
@@ -57,19 +58,25 @@
               steam-x86-rootfs
               steam-x86-fhs
               fex-emulator-x86
+              fex-interpreter
               ;
           };
 
           packages.steam-arm64 = pkgs.callPackage ./launcher.nix {
             muvm = pkgs.callPackage ./muvm-patched.nix { };
             channel = "stable";
-            inherit (self'.packages) steam-arm64-client steam-arm64-fhs steam-x86-rootfs;
+            inherit (self'.packages)
+              steam-arm64-client
+              steam-arm64-fhs
+              steam-x86-rootfs
+              fex-interpreter
+              ;
           };
           packages.steam-arm64-beta = pkgs.callPackage ./launcher.nix {
             muvm = pkgs.callPackage ./muvm-patched.nix { };
             channel = "publicbeta";
             steam-arm64-client = self'.packages.steam-arm64-client-beta;
-            inherit (self'.packages) steam-arm64-fhs steam-x86-rootfs;
+            inherit (self'.packages) steam-arm64-fhs steam-x86-rootfs fex-interpreter;
           };
 
           pre-commit.settings.hooks = {
@@ -570,6 +577,7 @@
         steam-runtime-arm64-libs = final.callPackage ./runtime-libs.nix { };
         steam-arm64-fhs = final.callPackage ./fhs.nix { };
         steam-x86-rootfs = final.callPackage ./fex-rootfs-x86.nix { };
+        fex-interpreter = final.callPackage ./fex-interpreter.nix { };
         steam-arm64 = final.callPackage ./launcher.nix { channel = "stable"; };
         steam-arm64-beta = final.callPackage ./launcher.nix {
           channel = "publicbeta";

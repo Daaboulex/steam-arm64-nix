@@ -10,16 +10,12 @@
   muvm,
   socat,
   fex,
+  fex-interpreter,
   steam-x86-fhs,
   steam-x86-rootfs,
   fex-emulator-x86,
 }:
 let
-  fexInterpreter = runCommand "fex-interpreter" { } ''
-    mkdir -p "$out/bin"
-    ln -s ${fex}/bin/FEX "$out/bin/FEXInterpreter"
-    test -x "$out/bin/FEXInterpreter"
-  '';
   desktopItem = makeDesktopItem {
     name = "steam-x86";
     desktopName = "Steam (x86)";
@@ -45,7 +41,7 @@ runCommand "steam-x86"
         muvm = lib.getExe muvm;
         xrdb = lib.getExe' xrdb "xrdb";
         flock = lib.getExe' util-linux "flock";
-        fexbin = "${fexInterpreter}/bin";
+        fexbin = "${fex-interpreter}/bin";
         fexsuite = "${fex}/bin";
         socatbin = "${socat}/bin";
         rootfs = "${steam-x86-rootfs}";
@@ -54,7 +50,7 @@ runCommand "steam-x86"
       }
     } "$out/bin/steam-x86"
 
-    test -x ${fexInterpreter}/bin/FEXInterpreter
+    test -x ${fex-interpreter}/bin/FEXInterpreter
     test -s ${steam-x86-rootfs}
     test -e ${fex-emulator-x86}/emulator.json
     test -x ${steam-x86-fhs}/bin/steam-x86-fhs

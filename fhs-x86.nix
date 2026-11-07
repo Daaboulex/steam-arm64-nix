@@ -4,19 +4,15 @@
   replaceVars,
   runCommand,
   fex,
+  fex-interpreter,
   steam-x86-entry,
   fex-emulator-x86,
 }:
 let
-  fexInterpreter = runCommand "fex-interpreter" { } ''
-    mkdir -p "$out/bin"
-    ln -s ${fex}/bin/FEX "$out/bin/FEXInterpreter"
-    test -x "$out/bin/FEXInterpreter"
-  '';
   guestRun = runCommand "steam-x86-guest-run" { } ''
     install -Dm755 ${
       replaceVars ./guest-run-x86.sh {
-        fexinterpreter = "${fexInterpreter}/bin/FEXInterpreter";
+        fexinterpreter = "${fex-interpreter}/bin/FEXInterpreter";
         steam = "${steam-x86-entry}/bin/steam";
         dbusConf = "${./session-bus.conf}";
         appconfig = "${fex-emulator-x86}/share/fex-emu/AppConfig";
