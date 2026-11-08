@@ -26,7 +26,7 @@ cursor_from_desktop() {
 
 require_4k_pages() {
   if [ "$1" != 4096 ]; then
-    echo "steam-x86: this kernel uses $1-byte pages and FEX needs 4096; run steam-x86, which starts it in muvm's 4K-page guest" >&2
+    echo "steam-x86: this kernel uses $1-byte pages and FEX needs 4096; this is the steam-x86-host package, built for a 4K kernel: install steam-x86 instead, which starts the client in muvm's 4K-page guest, or let programs.steam-arm64 pick by pageSize" >&2
     return 1
   fi
 }

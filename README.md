@@ -166,8 +166,9 @@ The checks that cannot run on this 16K machine run on GitHub's 4K-page
 `ubuntu-24.04-arm` runner: the Host probe workflow (`workflow_dispatch` only)
 runs `packages.host-probe`, which registers the module's two FEX handlers and
 mounts its rootfs as root, proves an x86-64 binary runs through them, and runs
-`steam-arm64-host --doctor` and `steam-x86-host --doctor` headless. It cannot
-prove a window, the GPU or Deck mode.
+`steam-arm64 --doctor` from the `steam-arm64-host` package and
+`steam-x86 --doctor` from `steam-x86-host`, headless. It cannot prove a window,
+the GPU or Deck mode.
 
 Guest output is lost whenever the launcher's own stdout is not a terminal,
 because muvm attaches the guest's streams to the terminal it was started from. A

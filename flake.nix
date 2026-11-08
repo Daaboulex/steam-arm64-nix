@@ -1138,11 +1138,15 @@
                       cat "$TMPDIR/refusal"
                       exit 1
                     }
-                    grep -qF "muvm's 4K-page guest" "$TMPDIR/refusal" || {
-                      echo "$l refuses without naming the guest launcher to run instead:"
-                      cat "$TMPDIR/refusal"
-                      exit 1
-                    }
+                    for named in "-host package" "muvm's 4K-page guest" "programs.steam-arm64"; do
+                      grep -qF -- "$named" "$TMPDIR/refusal" || {
+                        echo "$l refuses without naming $named; the user ran a command whose name both"
+                        echo "packages share, so the refusal must name the package this is, the one to"
+                        echo "install instead, and the module option that picks between them:"
+                        cat "$TMPDIR/refusal"
+                        exit 1
+                      }
+                    done
                   done
                 done
                 touch "$out"
