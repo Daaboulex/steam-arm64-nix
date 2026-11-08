@@ -50,7 +50,7 @@ main() {
   export MESA_SHADER_CACHE_MAX_SIZE=50G
 
   if [ "@guest@" = 1 ]; then
-    guest_env=(-e "PATH=@fexbin@:@fexsuite@:@socatbin@:/usr/bin:/bin:/usr/sbin:/sbin")
+    guest_env=()
     for var in PRESSURE_VESSEL_EMULATOR MESA_SHADER_CACHE_MAX_SIZE \
       XCURSOR_THEME XCURSOR_SIZE XCURSOR_PATH DBUS_SESSION_BUS_ADDRESS STEAM_EXTRA_COMPAT_TOOLS_PATHS LOCALE_ARCHIVE; do
       if [ -n "${!var:-}" ]; then

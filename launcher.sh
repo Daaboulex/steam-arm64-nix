@@ -96,7 +96,6 @@ main() {
         guest_env+=(-e "$var=${!var}")
       fi
     done
-    export PATH="@fexbin@:$PATH"
     stdin_as_pipe
     run=run_in_guest
   else

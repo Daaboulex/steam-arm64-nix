@@ -9,7 +9,6 @@
   util-linux,
   glibc,
   muvm,
-  fex-interpreter,
   steam-arm64-client,
   steam-arm64-fhs,
   steam-x86-rootfs,
@@ -63,7 +62,6 @@ runCommand
         xrdb = lib.getExe' xrdb "xrdb";
         flock = lib.optionalString guest (lib.getExe' util-linux "flock");
         getconf = lib.optionalString (!guest) (lib.getExe' glibc "getconf");
-        fexbin = lib.optionalString guest "${fex-interpreter}/bin";
         fhs = "${steam-arm64-fhs}";
         rootfs = lib.optionalString guest "${steam-x86-rootfs}";
         inherit channel;

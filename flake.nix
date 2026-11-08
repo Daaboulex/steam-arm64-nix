@@ -37,6 +37,7 @@
             inherit system;
             config = consumerConfig;
           };
+          muvm = pkgs.callPackage ./muvm-patched.nix { inherit (self'.packages) fex-interpreter; };
         in
         {
           packages.steam-arm64-client = pkgs.callPackage ./package.nix { channel = "stable"; };
@@ -58,30 +59,20 @@
             inherit (self'.packages) fex-emulator-x86 fex-interpreter;
           };
           packages.steam-x86 = pkgs.callPackage ./launcher-x86.nix {
-            muvm = pkgs.callPackage ./muvm-patched.nix { };
-            inherit (self'.packages)
-              steam-x86-rootfs
-              steam-x86-fhs
-              fex-emulator-x86
-              fex-interpreter
-              ;
+            inherit muvm;
+            inherit (self'.packages) steam-x86-rootfs steam-x86-fhs fex-emulator-x86;
           };
 
           packages.steam-arm64 = pkgs.callPackage ./launcher.nix {
-            muvm = pkgs.callPackage ./muvm-patched.nix { };
+            inherit muvm;
             channel = "stable";
-            inherit (self'.packages)
-              steam-arm64-client
-              steam-arm64-fhs
-              steam-x86-rootfs
-              fex-interpreter
-              ;
+            inherit (self'.packages) steam-arm64-client steam-arm64-fhs steam-x86-rootfs;
           };
           packages.steam-arm64-beta = pkgs.callPackage ./launcher.nix {
-            muvm = pkgs.callPackage ./muvm-patched.nix { };
+            inherit muvm;
             channel = "publicbeta";
             steam-arm64-client = self'.packages.steam-arm64-client-beta;
-            inherit (self'.packages) steam-arm64-fhs steam-x86-rootfs fex-interpreter;
+            inherit (self'.packages) steam-arm64-fhs steam-x86-rootfs;
           };
           packages.steam-arm64-host = self'.packages.steam-arm64.override { guest = false; };
           packages.steam-x86-host = self'.packages.steam-x86.override { guest = false; };
@@ -94,21 +85,66 @@
           };
 
           checks.muvm-patches-apply =
-            let
-              patched = pkgs.callPackage ./muvm-patched.nix { };
-            in
-            pkgs.runCommand "muvm-patches-apply" { nativeBuildInputs = [ pkgs.gnupatch ]; } ''
-              cp -r ${patched.src} src
-              chmod -R +w src
-              cd src
-              patch -p1 <${./muvm-mask-mit-shm.patch}
-              patch -p1 <${./muvm-bridge-dbus.patch}
-              patch -p1 <${./muvm-vm-tuning.patch}
-              patch -p1 <${./muvm-guest-groups.patch}
-              patch -p1 <${./muvm-guest-dns.patch}
-              patch -p1 <${./muvm-bridge-system-bus.patch}
-              touch "$out"
-            '';
+            pkgs.runCommand "muvm-patches-apply" { nativeBuildInputs = [ pkgs.gnupatch ]; }
+              ''
+                cp -r ${muvm.src} src
+                chmod -R +w src
+                cd src
+                patch -p1 <${./muvm-mask-mit-shm.patch}
+                patch -p1 <${./muvm-bridge-dbus.patch}
+                patch -p1 <${./muvm-vm-tuning.patch}
+                patch -p1 <${./muvm-guest-groups.patch}
+                patch -p1 <${./muvm-guest-dns.patch}
+                patch -p1 <${./muvm-bridge-system-bus.patch}
+                touch "$out"
+              '';
+
+          checks.fex-interpreter-still-needed = pkgs.runCommand "fex-interpreter-still-needed" { } ''
+            if ! grep -qF 'find_in_path("FEXInterpreter")' ${pkgs.muvm.src}/crates/muvm/src/guest/fex.rs; then
+              echo "muvm ${pkgs.muvm.version} no longer looks up FEXInterpreter on the guest's PATH."
+              echo "Read guest/fex.rs. If it finds FEX by the name FEX ${pkgs.fex.version} installs,"
+              echo "delete fex-interpreter.nix, the wrapProgram in muvm-patched.nix, the alias in"
+              echo "guest-run-x86.sh and fhs-x86.nix (exec FEX itself there), and this check."
+              exit 1
+            fi
+            touch "$out"
+          '';
+
+          checks.muvm-session-bus-divergence = pkgs.runCommand "muvm-session-bus-divergence" { } ''
+            if grep -rqE 'DBUS_SOCKET|join\("bus"\)|DBUS_SESSION_BUS_ADDRESS' ${pkgs.muvm.src}/crates/muvm/src; then
+              echo "muvm ${pkgs.muvm.version} now names the session bus itself."
+              echo "Read what it does. If the tray in the guest gets its menu over the"
+              echo "desktop's bus without our patch, delete muvm-bridge-dbus.patch, its lines"
+              echo "in muvm-patched.nix and muvm-patches-apply, and this check; the fallback"
+              echo "bus in both guest-run scripts stays for a session without a bus."
+              exit 1
+            fi
+            touch "$out"
+          '';
+
+          checks.muvm-stdin-divergence = pkgs.runCommand "muvm-stdin-divergence" { } ''
+            if ! grep -qF 'epoll.add(stdin.as_fd()' ${pkgs.muvm.src}/crates/muvm/src/tty.rs; then
+              echo "muvm ${pkgs.muvm.version} no longer adds its stdin to epoll in tty.rs, the"
+              echo "line that fails with EPERM on /dev/null and a regular file."
+              echo "Launch into a running guest from a desktop entry. If the launch lands,"
+              echo "delete stdin_as_pipe in both launchers, join-stdin-epollable, and this check."
+              exit 1
+            fi
+            touch "$out"
+          '';
+
+          checks.muvm-lock-name-divergence = pkgs.runCommand "muvm-lock-name-divergence" { } ''
+            if ! grep -qF 'join("muvm.lock")' ${pkgs.muvm.src}/crates/muvm/src/launch.rs; then
+              echo "muvm ${pkgs.muvm.version} no longer names its lock file muvm.lock in launch.rs."
+              echo "Both launchers flock that file to learn whether a guest is running: a guest"
+              echo "numbers its processes from one, so the pid file the last client left names"
+              echo "a live process in the next guest and the client exits believing it already"
+              echo "runs; with no guest holding the lock the pid file is stale and is removed."
+              echo "Find the new name and set it in forget_stale_pid in both launchers and here."
+              exit 1
+            fi
+            touch "$out"
+          '';
 
           checks.muvm-system-bus-divergence = pkgs.runCommand "muvm-system-bus-divergence" { } ''
             if grep -rq system_bus_socket ${pkgs.muvm.src}/crates/muvm/src; then
@@ -382,9 +418,9 @@
                 echo "the native client does not name the graphics provider for Valve's FEX tool"
                 exit 1
               }
-            grep -q 'export PATH="/nix/store/[a-z0-9]*-fex-interpreter/bin:' "$l" \
+            grep -qF '${lib.getExe muvm}' "$l" \
               || {
-                echo "the guest's PATH carries no FEXInterpreter, so muvm registers no x86 binfmt"
+                echo "the native client's launcher does not start the muvm whose PATH carries FEXInterpreter"
                 exit 1
               }
             rootfs=${self'.packages.steam-arm64-fhs.fhsenv}
@@ -492,24 +528,29 @@
             touch "$out"
           '';
 
-          checks.muvm-guest-path-socat = pkgs.runCommand "muvm-guest-path-socat" { } ''
-            status=0
+          checks.muvm-guest-path = pkgs.runCommand "muvm-guest-path" { } ''
+            wrapper=${lib.getExe muvm}
+            for needed in ${pkgs.socat}/bin ${self'.packages.fex-interpreter}/bin; do
+              grep -qaF -- "$needed" "$wrapper" "$(dirname "$wrapper")"/.muvm-wrapped* || {
+                echo "the muvm wrapper's PATH prefix lost $needed."
+                echo "muvm forwards the PATH it runs with into the guest (env.rs). There its"
+                echo "init runs socat for the pulse and session bus proxies, and setup_socket_proxy"
+                echo "returns Ok without a word when socat is absent, so the tray falls back to"
+                echo "an XEmbed icon with no name and no menu; and it registers the x86 binfmt by"
+                echo "finding FEXInterpreter, a name FEX no longer installs, so without the alias"
+                echo "no x86 game starts. nixpkgs' wrapper carries socat; muvm-patched.nix adds"
+                echo "the alias."
+                exit 1
+              }
+            done
             for l in ${self'.packages.steam-arm64}/bin/steam-arm64 \
               ${self'.packages.steam-x86}/bin/steam-x86; do
-              if grep -q '"PATH=' "$l" && ! grep -q '${pkgs.socat}/bin' "$l"; then
-                echo "$l hands the guest a PATH with no socat on it."
-                status=1
+              if grep -q '"PATH=' "$l"; then
+                echo "$l sets the guest's PATH itself, which replaces the one muvm forwards"
+                echo "and so drops socat and FEXInterpreter from it. Leave the guest PATH alone."
+                exit 1
               fi
             done
-            if [ "$status" -ne 0 ]; then
-              echo "muvm builds its pulse and session bus proxies by running socat, and"
-              echo "setup_socket_proxy returns Ok without a word when socat is absent from"
-              echo "the PATH the guest inherits, so the guest gets no bridge at all and the"
-              echo "tray falls back to an XEmbed icon with no name and no menu. Either leave"
-              echo "the guest PATH alone, as the arm64 launcher does, or put socat on the"
-              echo "one you set."
-              exit 1
-            fi
             touch "$out"
           '';
 
