@@ -37,6 +37,28 @@ stdin_as_pipe() {
   fi
 }
 
+restart_loop() {
+  local short=0 started status
+  while :; do
+    started=$SECONDS
+    status=0
+    "$@" || status=$?
+    if [ "$status" -ne 42 ]; then
+      return "$status"
+    fi
+    if [ $((SECONDS - started)) -lt 60 ]; then
+      short=$((short + 1))
+    else
+      short=0
+    fi
+    if [ "$short" -ge 5 ]; then
+      echo "steam-arm64: Steam asked to restart five times in a row without staying up a minute; that is a loop, not an update, so the client stays down" >&2
+      return 42
+    fi
+    echo "steam-arm64: Steam asked to restart" >&2
+  done
+}
+
 forget_stale_pid() {
   if "@flock@" -n "${XDG_RUNTIME_DIR:?}/muvm.lock" true 2>/dev/null; then
     rm -f -- "$HOME/.steam/steam.pid"
@@ -103,14 +125,7 @@ main() {
     run=run_on_host
   fi
 
-  while :; do
-    status=0
-    "$run" "$@" || status=$?
-    if [ "$status" -ne 42 ]; then
-      return "$status"
-    fi
-    echo "steam-arm64: Steam asked to restart" >&2
-  done
+  restart_loop "$run" "$@"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

@@ -613,6 +613,58 @@
               ''
             );
 
+          checks.launcher-restart-loop = pkgs.runCommand "steam-launcher-restart-loop" { } ''
+            source ${self'.packages.steam-arm64}/bin/steam-arm64
+            expect() {
+              local want_status=$1 want_runs=$2 label=$3
+              shift 3
+              runs=0
+              local status=0
+              restart_loop "$@" 2>"$TMPDIR/said" || status=$?
+              if [ "$status" -ne "$want_status" ] || [ "$runs" -ne "$want_runs" ]; then
+                echo "$label: exit $status after $runs runs, wanted exit $want_status after $want_runs"
+                cat "$TMPDIR/said"
+                exit 1
+              fi
+            }
+            asks_again() {
+              runs=$((runs + 1))
+              return 42
+            }
+            expect 42 5 "five quick restart requests in a row stop the loop" asks_again
+            grep -qF 'that is a loop, not an update' "$TMPDIR/said" || {
+              echo "giving up on a restart loop says nothing to the user:"
+              cat "$TMPDIR/said"
+              exit 1
+            }
+            finishes() {
+              runs=$((runs + 1))
+              return 0
+            }
+            expect 0 1 "a clean exit returns at once" finishes
+            fails() {
+              runs=$((runs + 1))
+              return 3
+            }
+            expect 3 1 "a failure returns its own status at once" fails
+            updates_then_runs() {
+              runs=$((runs + 1))
+              if [ "$runs" -eq 5 ]; then
+                SECONDS=$((SECONDS + 60))
+              fi
+              if [ "$runs" -lt 9 ]; then
+                return 42
+              fi
+              return 0
+            }
+            expect 0 9 "a run that stayed up a minute resets the count, so four short, one long and three short restarts run on" updates_then_runs
+            if ! grep -qF 'restart_loop "$run" "$@"' ${self'.packages.steam-arm64}/bin/steam-arm64; then
+              echo "the launcher's main no longer hands the client to restart_loop"
+              exit 1
+            fi
+            touch "$out"
+          '';
+
           checks.launcher-host-refuses-other-pages =
             pkgs.runCommand "steam-launcher-host-refuses-other-pages" { }
               ''
