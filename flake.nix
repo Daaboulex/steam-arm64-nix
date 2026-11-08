@@ -107,6 +107,24 @@
           };
           packages.steam-arm64-host = self'.packages.steam-arm64.override { guest = false; };
           packages.steam-x86-host = self'.packages.steam-x86.override { guest = false; };
+          packages.host-probe =
+            let
+              probed =
+                (evalModule {
+                  kernelPages = "4K";
+                  settings = {
+                    hostBinfmt = true;
+                    x86.enable = true;
+                  };
+                }).config;
+            in
+            pkgs.callPackage ./host-probe.nix {
+              registrations = builtins.readFile probed.environment.etc."binfmt.d/nixos.conf".source;
+              interpreters = lib.mapAttrs (_: r: r.interpreter) probed.boot.binfmt.registrations;
+              rootfs = probed.fileSystems."/run/fex-emu/rootfs".device;
+              steam-arm64-host = probed.programs.steam-arm64.package;
+              steam-x86-host = probed.programs.steam-arm64.x86.package;
+            };
 
           pre-commit.settings.hooks = {
             trim-trailing-whitespace.excludes = [ "\\.patch$" ];
@@ -595,8 +613,51 @@
                 echo "guest-run does not set FEX_ROOTFS"
                 exit 1
               }
+            grep -q 'FEX_APP_CONFIG_LOCATION=@appconfig@' ${./guest-run-x86.sh} \
+              || {
+                echo "guest-run does not name the per-application profile directory: FEX reads"
+                echo "profiles only from FEX_APP_CONFIG_LOCATION, so without it the web helper's"
+                echo "Multiblock profile in fex-emulator-x86 is shipped and never applied"
+                exit 1
+              }
             touch "$out"
           '';
+
+          checks.host-probe-pins-follow-the-standard =
+            pkgs.runCommand "host-probe-pins-follow-the-standard" { }
+              ''
+                workflow=${./.github/workflows/host-probe.yml}
+                ours=$(grep -oE 'uses: [^ ]+@[0-9a-f]{40}' "$workflow")
+                if [ -z "$ours" ]; then
+                  echo "host-probe.yml pins no action by commit"
+                  exit 1
+                fi
+                theirs=$(grep -rhoE 'uses: [^ ]+@[0-9a-f]{40}' ${inputs.std}/.github/workflows/)
+                while IFS= read -r pin; do
+                  if ! grep -qxF -- "$pin" <<<"$theirs"; then
+                    echo "host-probe.yml pins '$pin', which none of the standard's workflows carries."
+                    echo "This workflow sits outside the synced callers, so dependabot moves the"
+                    echo "standard's pins and this check moves ours: set it to the standard's pin."
+                    exit 1
+                  fi
+                done <<<"$ours"
+                triggers=$(sed -n '/^on:/,/^permissions:/{/^  [a-z_]*:/p}' "$workflow")
+                if [ "$triggers" != "  workflow_dispatch:" ]; then
+                  echo "host-probe.yml runs on something besides workflow_dispatch:"
+                  echo "$triggers"
+                  echo "the probe needs root on a runner and proves one host; it is run by hand."
+                  exit 1
+                fi
+                grep -qF 'runs-on: ubuntu-24.04-arm' "$workflow" || {
+                  echo "host-probe.yml no longer runs on ubuntu-24.04-arm, the 4K-page aarch64 runner"
+                  exit 1
+                }
+                grep -qF 'nix run .#host-probe' "$workflow" || {
+                  echo "host-probe.yml no longer runs packages.host-probe"
+                  exit 1
+                }
+                touch "$out"
+              '';
 
           checks.muvm-guest-path = pkgs.runCommand "muvm-guest-path" { } ''
             wrapper=${lib.getExe muvm}

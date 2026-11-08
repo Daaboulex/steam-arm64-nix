@@ -1,0 +1,18 @@
+name: Host probe
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: DeterminateSystems/determinate-nix-action@92957199488000b908fdad19f63711000965d8f3
+        with:
+          extra-conf: lazy-trees = false
+      - name: Register FEX, mount the rootfs and run both doctors on this 4K-page host
+        run: nix run .#host-probe
