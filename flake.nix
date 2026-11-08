@@ -355,8 +355,11 @@
                   fi
                 done < files
                 if [ "$count" -eq 0 ]; then
-                  echo "Every ELF file in Valve's aarch64 client now has LOAD segments aligned to 16K or more, so it loads on a 16K-page kernel."
-                  echo "The native client no longer needs muvm's 4K guest: run it on the host and retire the guest for it."
+                  echo "Every ELF file in Valve's aarch64 client now has LOAD segments aligned to 16K or more, so the client itself would load on a 16K-page kernel."
+                  echo "This is a decision day, not a switch to flip: Proton (ARM64) carries FEX, which refuses a non-4K host, so on a 16K"
+                  echo "kernel Windows games would still need muvm's guest while the client and native games could leave it. Decide whether"
+                  echo "the native client runs on the host with Proton (ARM64) kept in the guest, or everything stays in the guest, then"
+                  echo "change this check to match the decision."
                   exit 1
                 fi
                 echo "Valve's aarch64 client still has $count ELF files with LOAD segments aligned below 16K, so it needs muvm's 4K guest"

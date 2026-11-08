@@ -26,8 +26,10 @@ Two clients. `steam-arm64` is Valve's native aarch64 client, run inside the
 4K-page microVM its binaries need. On 2026-11-03, 33 of the client's 87 ELF
 files had LOAD segments aligned below 16K (Steam issue 13745, closed as not
 planned), and FEX 2608 aborted on the 16K-page host. `checks.client-needs-4k-pages`
-fails the day a client update brings that count to zero, which is when the
-native client can leave the guest. Windows games go through Valve's Proton
+fails the day a client update brings that count to zero. That day is a
+decision, not a switch: the client itself could then leave the guest, but
+Proton (ARM64) carries FEX, which refuses a non-4K host, so Windows games
+would still need the guest on a 16K kernel. Windows games go through Valve's Proton
 (ARM64), Wine built as ARM64EC with FEX inside it; x86 Linux games and x86
 Proton go through Valve's own FEX compatibility tool, which the client
 downloads, and which takes its x86 Mesa from the FEX rootfs the launcher mounts.
@@ -47,7 +49,9 @@ microVM, in the FHS layout pressure-vessel needs so its webhelper renders.
 
 Then take `overlays.default`, which provides the launchers `steam-arm64` and
 `steam-arm64-beta`, the client trees `steam-arm64-client` and
-`steam-arm64-client-beta` behind them, and `steam-x86`. The client is unfree, so
+`steam-arm64-client-beta` behind them, and `steam-x86` with its FHS and FEX
+bundle, and import `nixosModules.default` (below), which installs the clients
+the right way for the kernel's page size. The client is unfree, so
 the consumer sets `nixpkgs.config.allowUnfree = true`. Its `steamui.so` and
 `vgui2_s.so` link GTK 2, its tray loads `libappindicator.so.1`, and its
 `libavformat.so.58` links Debian's `libbz2.so.1.0`, a soname nixpkgs' bzip2
@@ -116,8 +120,33 @@ is refused off 4K, where FEX cannot run, and beside another handler for the
 same ELF magic, such as `boot.binfmt.emulatedSystems = [ "x86_64-linux" ]`.
 `extraCompatPackages` takes the same tool packages `programs.steam` does, for
 the native client; `x86.extraCompatPackages` takes x86-64 tools for the x86
-client. `checks.module-refusals` evaluates each refusal and the host and guest
-wiring.
+client, built as aarch64 derivations (a prebuilt tarball runs nothing at
+build time). `remotePlay.openFirewall` and `localNetworkGameTransfers.openFirewall`
+open on the host the ports both launchers publish out of the guest, from the
+one list in `ports.nix`. `checks.module-refusals` evaluates each refusal and
+the host and guest wiring.
+
+## Devices
+
+Which way a machine runs the clients follows from its kernel's page size, and
+whether it was tried. Read 2026-11-07 from each project's own pages; only the
+M1 row and the runner row are verified.
+
+| Device | Kernel pages | Path here | Verified |
+|---|---|---|---|
+| Apple M1, M2 (Asahi) | 16K | guest; GPU through muvm's native context (Asahi 7.1.5's regression fixed 2026-09-11) | yes, the M1 this is developed on |
+| Apple M3 (Asahi) | 16K | guest; Asahi says not to expect performant 3D yet (2026-09-06), so likely software GPU | no |
+| Apple M4 and later | no Asahi kernel | none | no |
+| Snapdragon X Elite, X Plus, X13s, SDM845 phones (Pocophone F1, Pixel 3) | 4K on mainline | host: `steam-arm64-host` and `steam-x86-host` with `hostBinfmt`; turnip Vulkan | the contributor's Pocophone F1 ran PR #6's host path (2026-11-07); this module's build is not yet |
+| Raspberry Pi 5 | 16K with `kernel_2712.img`, 4K with `kernel8.img` | guest with software GPU (v3d has no muvm native context), or host on the 4K kernel | no |
+| Raspberry Pi 4 | 4K | host; v3dv Vulkan 1.2 | no |
+| RK3588 (Mali-G610, PanVK) | 4K | host | no |
+| Pinebook Pro (RK3399) | 4K | host; no Vulkan, so no Proton | no |
+| Ampere Altra, One | 4K by default; 64K distro kernels exist | 4K: host; 64K: guest | no; the 64K path is unverified anywhere, muvm on a 64K host has no test on record |
+| NVIDIA Grace, DGX Spark (GB10) | 64K | guest; FEX refuses a 64K host | no, unverified |
+| Jetson Orin, MediaTek Chromebooks | unconfirmed | host if 4K, guest otherwise | no |
+| GitHub `ubuntu-24.04-arm` runner | 4K | host, headless: the Host probe workflow registers FEX, mounts the rootfs and runs both doctors | by dispatching the workflow |
+| Steam Frame | SteamOS arm64, Valve's own client and FEX | not a NixOS target | n/a |
 
 ## Usage
 
@@ -130,8 +159,15 @@ itself current from the network once it is running.
 
 ```bash
 nix build .#packages.aarch64-linux.default
-nix flake check
+nix flake check --no-eval-cache
 ```
+
+The checks that cannot run on this 16K machine run on GitHub's 4K-page
+`ubuntu-24.04-arm` runner: the Host probe workflow (`workflow_dispatch` only)
+runs `packages.host-probe`, which registers the module's two FEX handlers and
+mounts its rootfs as root, proves an x86-64 binary runs through them, and runs
+`steam-arm64-host --doctor` and `steam-x86-host --doctor` headless. It cannot
+prove a window, the GPU or Deck mode.
 
 Guest output is lost whenever the launcher's own stdout is not a terminal,
 because muvm attaches the guest's streams to the terminal it was started from. A
@@ -172,21 +208,26 @@ the task manager name either client's window after the x86 entry.
 
 ```bash
 steam-arm64 --doctor
+steam-x86 --doctor
 ```
 
-Runs inside the guest and the sandbox the client gets, joining a running
-client or starting a guest of its own, and reports each thing an x86 game
-needs: the 4K page size, the binfmt handler, the FEX rootfs and the graphics
-provider, python3 for Valve's FEX tool, the cursor path, the session bus, and
-the Steam apps the client must have downloaded (FEX, Steam Linux Runtime 4.0
-arm64, a Proton for ARM64). It also starts the runtime's vulkaninfo the way
-Steam starts a game, once in Runtime 4.0 arm64 and once through Valve's FEX
-tool in Runtime 2.0, and reports whether each gets the GPU's Vulkan and GL
-drivers.
+Each runs inside the sandbox its client gets, in the guest (joining a running
+client or starting a guest of its own) or on the host, and reports each thing
+an x86 game needs: the 4K page size, the binfmt handler, the FEX rootfs and
+the graphics provider, python3 for Valve's FEX tool, the cursor path, the
+session bus, the SteamOS helpers Deck mode calls, and the Steam apps the
+client must have downloaded (FEX, Steam Linux Runtime 4.0 arm64, a Proton for
+ARM64). The native doctor also starts the runtime's vulkaninfo the way Steam
+starts a game, once in Runtime 4.0 arm64 and once through Valve's FEX tool in
+Runtime 2.0, and reports whether each gets the GPU's Vulkan and GL drivers,
+and counts the gamepads and hidraw devices the client can see.
 
-Extra compatibility tools reach the client through `STEAM_EXTRA_COMPAT_TOOLS_PATHS`,
-the same variable nixpkgs' `programs.steam.extraCompatPackages` sets; both
-launchers hand it to the guest when the session has it.
+Extra compatibility tools reach a client through `STEAM_EXTRA_COMPAT_TOOLS_PATHS`,
+the variable nixpkgs' `programs.steam.extraCompatPackages` sets. The module's
+`extraCompatPackages` and `x86.extraCompatPackages` set it per client through
+each launcher's `extraCompatTools` argument, ahead of whatever the session
+already names, and a package without a `compatibilitytool.vdf` fails the
+launcher's build.
 
 ## What works on this machine
 
@@ -206,8 +247,12 @@ its evidence: a Steam log under `logs/`, a launch log, or a probe of the guest.
 | Windows games | works: Proton 11.0 (ARM64), Proton Experimental (ARM64), GE-Proton aarch64, Proton-CachyOS arm64 | works: Proton 10.0, Experimental, Hotfix | a game ran under GE-Proton11-7; `compat_log.txt` registrations |
 | x86 Linux games | works: Valve's FEX tool, the runtime the game names, Vulkan and GL from the FEX rootfs's x86 Mesa, no launch option | works, FEX with Runtime sniper | `steam-arm64 --doctor`: an x86-64 game under FEX gets the GPU's Vulkan and GL drivers |
 | aarch64 Linux games | native | not possible | by construction |
-| Gamepads | works through muvm's hidpipe, always on: host joysticks recreated by uinput in the guest, rumble included; no hidraw, since the guest kernel has no HID stack, so gyro, touchpad, lightbar and Steam Input's HID drivers are missing (AsahiLinux/muvm#244) | same | `controller.txt`: a DualSense opened in the native client; muvm `hidpipe_server.rs`; libkrunfw's aarch64 config; a guest lists no `/dev/hidraw` |
-| Remote Play, Steam Link, LAN transfer | the guest cannot announce itself: passt opens its sockets without broadcast and gives link-local multicast no scope, so the client's UDP broadcast to 27036 and its IPv6 multicast never leave (passt bug 163, open). Both launchers publish UDP 27031 and 27036 and TCP 27036 and 27037, so a LAN device's discovery and stream reach the guest through the host's bound sockets; untested with a device. Pairing by PIN and the same-account host list go through Steam's servers and need no broadcast | same | every launch log; `remote_connections.txt`; passt `udp_flow.c`, `util.c`, `pif.c` |
+| Gamepads | works through muvm's hidpipe, always on: host joysticks recreated by uinput in the guest, rumble included; no hidraw, since the guest kernel has no HID stack, so gyro, touchpad, lightbar and Steam Input's HID drivers are missing (AsahiLinux/muvm#244); on the host path hidraw is there once `hardware.steam-hardware.enable` grants it, and the doctor counts the devices | same | `controller.txt`: a DualSense opened in the native client; muvm `hidpipe_server.rs`; libkrunfw's aarch64 config; `steam-arm64 --doctor`'s hidraw line |
+| Remote Play, Steam Link, LAN transfer | the guest cannot announce itself: passt opens its sockets without broadcast and gives link-local multicast no scope, so the client's UDP broadcast to 27036 and its IPv6 multicast never leave. Both launchers publish UDP 27031 and 27036 and TCP 27036, 27037 and 27040 from `ports.nix`, and `programs.steam-arm64.remotePlay.openFirewall` and `localNetworkGameTransfers.openFirewall` open the same ports on the host, so a LAN device's discovery, stream and transfer reach the guest through the host's bound sockets; untested with a device. Pairing by PIN and the same-account host list go through Steam's servers and need no broadcast | same | every launch log; `remote_connections.txt`; passt `udp_flow.c`, `util.c`, `pif.c`; `checks.remote-play-ports-published` |
+| Running on the host, no microVM (4K kernel) | `steam-arm64-host`: the client in its FHS sandbox on the host's kernel; refuses any other page size and names the guest launcher | `steam-x86-host`: Valve's x86 client under the host's FEX, with `hostBinfmt` | `checks.launcher-host-refuses-other-pages`, `checks.steam-arm64-host-wiring`; the Host probe on the 4K runner |
+| Deck UI (`-gamepadui -steamos3 -steampal -steamdeck`) | the SteamOS helpers the client calls are stood in: an update check answers no update, the branch list is `rel` and a switch is refused, Power to desktop shuts the client down; no gamescope session here; the UI itself unverified | the same helpers in the x86 FHS, unverified | `checks.steamos-stubs`; the helper names in `steamui.so`, `steamclient.so` and `steam` |
+| Restart after a self-update | the client exits 42 and the launcher runs it again; five requests in a row that each lasted under a minute stop it | Valve's `steam.sh` in the x86 bootstrap restarts on 42 itself (`MAGIC_RESTART_EXITCODE`) | `checks.launcher-restart-loop`; `steam.sh` in `bootstraplinux_ubuntu12_32.tar.xz` |
+| Compatibility tools from Nix | `programs.steam-arm64.extraCompatPackages`, the aarch64 builds of GE-Proton and Proton-CachyOS | `x86.extraCompatPackages`, x86-64 builds as aarch64 derivations; the Proton repos ship those for x86_64-linux only today, so Valve's own Protons for now | `checks.steam-arm64-compat-tools`; `compat_log.txt` |
 | In-game overlay | libraries present for aarch64 and, for FEX games, x86-64; attachment under FEX unverified | present | `steamrtarm64/` and `ubuntu12_64/` |
 | Game Recording | present, unverified: the logs show it declining a game it is disabled for | same | `console-linux.txt` |
 | Big Picture | works | unverified | no run yet for steam 64-bit |
@@ -220,9 +265,11 @@ its evidence: a Steam log under `logs/`, a launch log, or a probe of the guest.
 | Hardware survey | partial: the GPU is reported, `lspci` finds no `/proc/bus/pci` | partial | `steamsysinfo.txt` |
 | Android games (Lepton) | not on this machine: the guest kernel has no binder | not possible | a guest's `/proc/filesystems` |
 
-Valve documents none of this for the desktop arm64 client: no release note, no
-support page, no reply on its tracker names it (checked 2026-09-23). What Valve
-documents is the mechanism the client uses: the Steam Linux Runtime 4.0 arm64
+Valve closed steam-for-linux#13745, the request to run its aarch64 client on a
+16K-page kernel, as not planned on 2026-10-16, and its support page says the
+Steam for Linux client is not supported on ARM hardware (read 2026-11-07); no
+release note names the desktop arm64 client. What Valve documents is the
+mechanism the client uses: the Steam Linux Runtime 4.0 arm64
 tool (its README says 32-bit ARM is unsupported), `emulator.json` and
 `graphics-provider.json` in steam-runtime-tools, and the Proton README, which
 says an ARM64 build cannot be used from the x86 client under FEX. Lepton's README
