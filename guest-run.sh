@@ -65,7 +65,7 @@ if [ "${1:-}" = "--doctor" ]; then
   check "Valve's FEX tool starts" env STEAM_COMPAT_DATA_PATH=/tmp "$tools/FEX-Emu/fex-compat-tool" --help
   check "Steam Linux Runtime 4.0 arm64 installed (app 4185400)" test -x "$tools/SteamLinuxRuntime_4-arm64/pressure-vessel/bin/pressure-vessel-wrap"
   check "Proton (ARM64) installed" sh -c 'ls -d "$1"/Proton*ARM64*/proton >/dev/null 2>&1' sh "$tools"
-  check "GPU render node in the guest" test -e /dev/dri/renderD128
+  check "GPU render node visible to the client" test -e /dev/dri/renderD128
   game_sees_gpu() {
     local vulkaninfo=$1 triplet=$2 scratch rc
     shift 2
@@ -90,7 +90,7 @@ if [ "${1:-}" = "--doctor" ]; then
     game_sees_gpu x86_64-linux-gnu-vulkaninfo x86_64-linux-gnu \
     "$tools/FEX-Emu/fex-compat-tool" waitforexitandrun -- \
     "$tools/SteamLinuxRuntime_soldier/_v2-entry-point" --verb=waitforexitandrun --
-  check "audio server socket shared into the guest" test -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pipewire-0"
+  check "audio server socket visible to the client" test -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pipewire-0"
   check "aarch64 overlay library installed" test -f "$steam_root/steamrtarm64/gameoverlayrenderer.so"
   check "x86-64 overlay library for FEX games installed" test -f "$steam_root/ubuntu12_64/gameoverlayrenderer.so"
   check "SteamOS helpers for Deck mode in place" test -x /usr/bin/steamos-polkit-helpers/steamos-update -a -x /usr/bin/steamos-select-branch -a -x /usr/bin/steamos-session-select
@@ -99,9 +99,9 @@ if [ "${1:-}" = "--doctor" ]; then
   else
     gamepads=0
   fi
-  printf 'info  gamepads the client can see: %s (in the guest, muvm forwards each one attached on the host)\n' "$gamepads"
+  printf 'info  gamepads the client can see: %s (inside the muvm guest, muvm forwards each one attached on the host)\n' "$gamepads"
   hidraws=$(find /dev -maxdepth 1 -name 'hidraw*' | wc -l)
-  printf 'info  hidraw devices the client can see: %s (none in the guest, whose kernel has no HID stack, so Steam Input has no gyro, touchpad or lightbar there; on the host they need hardware.steam-hardware.enable for the udev rules)\n' "$hidraws"
+  printf 'info  hidraw devices the client can see: %s (always 0 inside the muvm guest, whose kernel has no HID stack, so Steam Input has no gyro, touchpad or lightbar there; on a 4K host they need hardware.steam-hardware.enable for the udev rules)\n' "$hidraws"
   if grep -q binder /proc/filesystems 2>/dev/null; then
     printf 'info  the kernel offers binder, the Android layer could be tried\n'
   else
