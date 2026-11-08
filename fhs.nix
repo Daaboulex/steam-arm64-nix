@@ -159,6 +159,17 @@ buildFHSEnv {
       ffmpeg_7
       nghttp2
       speechd
+
+      (callPackage ./steamos-stubs.nix {
+        shutdown = ''
+          client="''${STEAM_ARM64_ROOT:?steamos-session-select runs inside steam-arm64, which sets STEAM_ARM64_ROOT}/steamrtarm64/steam"
+          if [ ! -x "$client" ]; then
+            echo "steamos-session-select: no client at $client" >&2
+            exit 1
+          fi
+          exec "$client" -shutdown
+        '';
+      })
     ];
   profile = ''
     unset GIO_EXTRA_MODULES

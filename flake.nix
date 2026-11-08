@@ -923,6 +923,64 @@
                 lib.concatMapStringsSep "\n" (p: "echo ${lib.escapeShellArg p}") problems + "\nexit 1\n"
             );
 
+          checks.steamos-stubs =
+            let
+              client = self'.packages.default;
+              native = self'.packages.steam-arm64-fhs.fhsenv;
+              x86 = self'.packages.steam-x86-fhs.fhsenv;
+            in
+            pkgs.runCommand "steam-arm64-steamos-stubs" { } ''
+              refuse() {
+                echo "$1"
+                exit 1
+              }
+              for rootfs in ${native} ${x86}; do
+                for h in steamos-polkit-helpers/steamos-update steamos-select-branch \
+                  steamos-polkit-helpers/steamos-select-branch steamos-session-select; do
+                  test -x "$rootfs/usr/bin/$h" || refuse "$rootfs has no /usr/bin/$h, which Valve's client calls in Deck mode"
+                done
+                for absent in steamos-update steamos-wifi-set-backend steamos-polkit-helpers/steamos-priv-write \
+                  steamos-polkit-helpers/steamos-set-timezone steamos-polkit-helpers/steamos-set-hostname; do
+                  if [ -e "$rootfs/usr/bin/$absent" ]; then
+                    refuse "$rootfs ships /usr/bin/$absent: nothing calls the bare steamos-update, and the others would report success for a change that did not happen or write a fact the system declares"
+                  fi
+                done
+                update="$rootfs/usr/bin/steamos-polkit-helpers/steamos-update"
+                "$update" --supports-duplicate-detection || refuse "the duplicate-detection probe must exit 0"
+                status=0
+                "$update" check || status=$?
+                [ "$status" -eq 7 ] || refuse "an update check must exit 7, SteamOS's no update available, got $status"
+                branch="$rootfs/usr/bin/steamos-select-branch"
+                [ "$("$branch" -l)" = rel ] || refuse "steamos-select-branch -l must list rel alone"
+                [ "$("$branch" -c)" = rel ] || refuse "steamos-select-branch -c must report rel"
+                if "$branch" beta 2>/dev/null; then
+                  refuse "steamos-select-branch accepted a switch; the client's channel is package/beta, not an OS branch"
+                fi
+              done
+              select=${native}/usr/bin/steamos-session-select
+              if "$select" plasma 2>/dev/null; then
+                refuse "the native steamos-session-select ran without STEAM_ARM64_ROOT"
+              fi
+              mkdir -p "$TMPDIR/empty" "$TMPDIR/root/steamrtarm64"
+              if STEAM_ARM64_ROOT="$TMPDIR/empty" "$select" plasma 2>/dev/null; then
+                refuse "the native steamos-session-select ran with no client in the Steam root"
+              fi
+              printf '#!%s\nprintf "%%s\\n" "$@" >"%s"\n' "${pkgs.bash}/bin/sh" "$TMPDIR/args" >"$TMPDIR/root/steamrtarm64/steam"
+              chmod +x "$TMPDIR/root/steamrtarm64/steam"
+              STEAM_ARM64_ROOT="$TMPDIR/root" "$select" plasma
+              [ "$(cat "$TMPDIR/args")" = -shutdown ] || refuse "the native steamos-session-select did not ask the client to shut down: $(cat "$TMPDIR/args")"
+              grep -qF -- '${pkgs.steam-unwrapped}/bin/steam -shutdown' ${x86}/usr/bin/steamos-session-select \
+                || refuse "the x86 steamos-session-select does not shut Valve's x86 client down through its steam.sh"
+              grep -qF '${self'.packages.fex-interpreter}/bin/FEXInterpreter' ${x86}/usr/bin/steamos-session-select \
+                || refuse "the x86 steamos-session-select does not run steam.sh under FEX, so uname would not say x86_64"
+              for pair in 'steam steamos-polkit-helpers/steamos-update' 'steamclient.so steamos-select-branch' 'steamui.so steamos-session-select'; do
+                set -- $pair
+                grep -qaF "$2" ${client}/steamrtarm64/$1 \
+                  || refuse "Valve's client ${client.version} no longer names $2 in steamrtarm64/$1: delete that stub from steamos-stubs.nix and this line"
+              done
+              touch "$out"
+            '';
+
           checks.launcher-host-refuses-other-pages =
             pkgs.runCommand "steam-launcher-host-refuses-other-pages" { }
               ''

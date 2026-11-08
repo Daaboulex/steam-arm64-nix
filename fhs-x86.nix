@@ -35,6 +35,10 @@ buildFHSEnv {
       lsb-release
       pciutils
       xz
+
+      (callPackage ./steamos-stubs.nix {
+        shutdown = "exec ${fex-interpreter}/bin/FEXInterpreter /usr/bin/bash ${steam-x86-entry}/bin/steam -shutdown";
+      })
     ];
 
   extraBwrapArgs = [

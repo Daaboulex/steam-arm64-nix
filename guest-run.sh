@@ -3,27 +3,16 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-# buildFHSEnv writes its profile to /etc/profile, which only a login shell reads.
 if [ -e /usr/lib64/locale/locale-archive ]; then
   export LOCALE_ARCHIVE=/usr/lib64/locale/locale-archive
 fi
 
 steam_root="${STEAM_ARM64_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/Steam}"
 
-# muvm keeps one guest per user and a launch into a running guest keeps that
-# guest's mounts, so a guest another command started has no FEX rootfs and the
-# graphics provider named for Valve's FEX tool points at nothing.
 if [ -n "${STEAM_COMPAT_GRAPHICS_PROVIDER:-}" ] && [ ! -f "$STEAM_COMPAT_GRAPHICS_PROVIDER" ]; then
   echo "steam-arm64: $STEAM_COMPAT_GRAPHICS_PROVIDER is missing, so x86 games will not start: in muvm's guest, the running guest was started by another command and has no FEX rootfs until it exits; on the host, programs.steam-arm64.hostBinfmt mounts it" >&2
 fi
 
-# The guest has no session bus of its own and the client's launcher service
-# exits without one. A bus that will not start must never stop the client, so
-# this is best effort and the client runs either way.
-# The desktop's own bus is what the tray needs: an indicator that finds no
-# StatusNotifierWatcher falls back to an XEmbed icon, and an XEmbed icon has no
-# menu. The host's socket is on the shared filesystem, so try it and prove it
-# answers before trusting it; a bus of our own is the fallback.
 system_bus="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/system_bus"
 if [ -S "$system_bus" ] && DBUS_SYSTEM_BUS_ADDRESS="unix:path=$system_bus" dbus-send --system \
   --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames >/dev/null 2>&1; then
@@ -49,9 +38,6 @@ if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
   fi
 fi
 
-# steam-arm64 --doctor runs here, inside the guest and the sandbox the client
-# gets, and reports each thing an x86 game needs, so the stack can be checked
-# without launching a game.
 if [ "${1:-}" = "--doctor" ]; then
   status=0
   check() {
@@ -107,12 +93,15 @@ if [ "${1:-}" = "--doctor" ]; then
   check "audio server socket shared into the guest" test -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pipewire-0"
   check "aarch64 overlay library installed" test -f "$steam_root/steamrtarm64/gameoverlayrenderer.so"
   check "x86-64 overlay library for FEX games installed" test -f "$steam_root/ubuntu12_64/gameoverlayrenderer.so"
+  check "SteamOS helpers for Deck mode in place" test -x /usr/bin/steamos-polkit-helpers/steamos-update -a -x /usr/bin/steamos-select-branch -a -x /usr/bin/steamos-session-select
   if [ -d /dev/input ]; then
     gamepads=$(find /dev/input -maxdepth 1 -name 'event*' | wc -l)
   else
     gamepads=0
   fi
   printf 'info  gamepads the client can see: %s (in the guest, muvm forwards each one attached on the host)\n' "$gamepads"
+  hidraws=$(find /dev -maxdepth 1 -name 'hidraw*' | wc -l)
+  printf 'info  hidraw devices the client can see: %s (none in the guest, whose kernel has no HID stack, so Steam Input has no gyro, touchpad or lightbar there; on the host they need hardware.steam-hardware.enable for the udev rules)\n' "$hidraws"
   if grep -q binder /proc/filesystems 2>/dev/null; then
     printf 'info  the kernel offers binder, the Android layer could be tried\n'
   else
