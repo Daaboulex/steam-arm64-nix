@@ -24,6 +24,21 @@ let
     if pageSize == null then "an unknown page size" else "${toString pageSize}-byte pages";
   host = pageSize == 4096;
   fexRootfs = "/run/fex-emu/rootfs";
+  ports = import ./ports.nix;
+  portList = proto: feature: lib.concatMapStringsSep ", " toString ports.${feature}.${proto};
+  openFirewall =
+    feature: what:
+    lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "open TCP ${portList "tcp" feature} and UDP ${portList "udp" feature} on the host's firewall for ${what}; both launchers publish the same ports out of muvm's guest, from the one list in ports.nix";
+    };
+  openedPorts =
+    proto:
+    lib.optionals cfg.remotePlay.openFirewall ports.remotePlay.${proto}
+    ++
+      lib.optionals cfg.localNetworkGameTransfers.openFirewall
+        ports.localNetworkGameTransfers.${proto};
   elfMagics = {
     FEX-x86_64 = utils.binfmtMagics.x86_64-linux;
     FEX-i386 = utils.binfmtMagics.i386-linux;
@@ -76,6 +91,8 @@ in
       default = [ ];
       description = "aarch64 compatibility tools for the native client's dropdown, each with a steamcompattool output or a compatibilitytool.vdf at its root, as programs.steam.extraCompatPackages takes them";
     };
+    remotePlay.openFirewall = openFirewall "remotePlay" "Remote Play and Steam Link, whose discovery broadcast cannot leave the guest, so a LAN device reaches this client through these ports alone";
+    localNetworkGameTransfers.openFirewall = openFirewall "localNetworkGameTransfers" "game transfers from another Steam client on the LAN";
     x86 = {
       enable = lib.mkEnableOption "Valve's x86-64 Steam client beside the native one, translated by FEX: inside muvm's guest off a 4K kernel, under the host's FEX on one";
       package = lib.mkOption {
@@ -155,5 +172,10 @@ in
     };
 
     environment.sessionVariables.FEX_ROOTFS = lib.mkIf cfg.hostBinfmt fexRootfs;
+
+    networking.firewall = {
+      allowedTCPPorts = openedPorts "tcp";
+      allowedUDPPorts = openedPorts "udp";
+    };
   };
 }

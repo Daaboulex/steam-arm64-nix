@@ -52,6 +52,9 @@ runCommand ("steam-x86" + lib.optionalString (!guest) "-host")
         flock = lib.optionalString guest (lib.getExe' util-linux "flock");
         getconf = lib.optionalString (!guest) (lib.getExe' glibc "getconf");
         rootfs = lib.optionalString guest "${steam-x86-rootfs}";
+        ports = lib.optionalString guest (
+          lib.concatMapStringsSep " " (p: "-p ${p}") (import ./ports.nix).published
+        );
         emulator = "${fex-emulator-x86}/emulator.json";
         fhs = "${steam-x86-fhs}";
         compatTools = lib.makeSearchPathOutput "steamcompattool" "" extraCompatTools;

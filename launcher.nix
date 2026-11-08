@@ -65,6 +65,9 @@ runCommand
         getconf = lib.optionalString (!guest) (lib.getExe' glibc "getconf");
         fhs = "${steam-arm64-fhs}";
         rootfs = lib.optionalString guest "${steam-x86-rootfs}";
+        ports = lib.optionalString guest (
+          lib.concatMapStringsSep " " (p: "-p ${p}") (import ./ports.nix).published
+        );
         compatTools = lib.makeSearchPathOutput "steamcompattool" "" extraCompatTools;
         inherit channel;
       }
