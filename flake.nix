@@ -651,6 +651,19 @@
                 echo "Multiblock profile in fex-emulator-x86 is shipped and never applied"
                 exit 1
               }
+            for g in ${./guest-run.sh} ${./guest-run-x86.sh}; do
+              grep -q 'elif ! dbus-send --system' "$g" \
+                || {
+                  echo "$g warns about the system bus without asking it first: on the host the"
+                  echo "bridged socket is absent by design and the system bus answers directly,"
+                  echo "so an else branch there warns on every launch"
+                  exit 1
+                }
+              if grep -q 'not reachable from the guest' "$g"; then
+                echo "$g says 'from the guest', which is false on the host path"
+                exit 1
+              fi
+            done
             touch "$out"
           '';
 
