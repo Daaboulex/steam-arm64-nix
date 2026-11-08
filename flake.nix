@@ -671,11 +671,19 @@
             pkgs.runCommand "host-probe-pins-follow-the-standard" { }
               ''
                 workflow=${./.github/workflows/host-probe.yml}
-                ours=$(grep -oE 'uses: [^ ]+@[0-9a-f]{40}' "$workflow")
+                ours=$(grep -oE 'uses: [^ ]+' "$workflow")
                 if [ -z "$ours" ]; then
-                  echo "host-probe.yml pins no action by commit"
+                  echo "host-probe.yml uses no action at all"
                   exit 1
                 fi
+                while IFS= read -r use; do
+                  if ! grep -qxE 'uses: [^ @]+@[0-9a-f]{40}' <<<"$use"; then
+                    echo "host-probe.yml has '$use', which is not pinned to a 40-character commit;"
+                    echo "a tag or a branch moves under the workflow, so pin the commit the"
+                    echo "standard's workflows pin."
+                    exit 1
+                  fi
+                done <<<"$ours"
                 theirs=$(grep -rhoE 'uses: [^ ]+@[0-9a-f]{40}' ${inputs.std}/.github/workflows/)
                 while IFS= read -r pin; do
                   if ! grep -qxF -- "$pin" <<<"$theirs"; then
