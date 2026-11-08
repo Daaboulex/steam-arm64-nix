@@ -160,7 +160,12 @@
           '';
 
           checks.muvm-session-bus-divergence = pkgs.runCommand "muvm-session-bus-divergence" { } ''
-            if grep -rqE 'DBUS_SOCKET|join\("bus"\)|DBUS_SESSION_BUS_ADDRESS' ${pkgs.muvm.src}/crates/muvm/src; then
+            src=${pkgs.muvm.src}/crates/muvm/src
+            if [ ! -d "$src" ]; then
+              echo "muvm ${pkgs.muvm.version} has no $src; find where its source lives now."
+              exit 1
+            fi
+            if grep -rqE 'DBUS_SOCKET|join\("bus"\)|DBUS_SESSION_BUS_ADDRESS' "$src"; then
               echo "muvm ${pkgs.muvm.version} now names the session bus itself."
               echo "Read what it does. If the tray in the guest gets its menu over the"
               echo "desktop's bus without our patch, delete muvm-bridge-dbus.patch, its lines"
@@ -196,7 +201,12 @@
           '';
 
           checks.muvm-system-bus-divergence = pkgs.runCommand "muvm-system-bus-divergence" { } ''
-            if grep -rq system_bus_socket ${pkgs.muvm.src}/crates/muvm/src; then
+            src=${pkgs.muvm.src}/crates/muvm/src
+            if [ ! -d "$src" ]; then
+              echo "muvm ${pkgs.muvm.version} has no $src; find where its source lives now."
+              exit 1
+            fi
+            if grep -rq system_bus_socket "$src"; then
               echo "muvm ${pkgs.muvm.version} now names the system bus socket itself."
               echo "Read what it does. If the guest reaches the host's system bus, delete"
               echo "muvm-bridge-system-bus.patch, the DBUS_SYSTEM_BUS_ADDRESS lines in both"
@@ -207,7 +217,12 @@
           '';
 
           checks.muvm-shm-divergence = pkgs.runCommand "muvm-shm-divergence" { } ''
-            if grep -q MIT-SHM ${pkgs.muvm.src}/crates/muvm/src/guest/bridge/x11.rs; then
+            x11=${pkgs.muvm.src}/crates/muvm/src/guest/bridge/x11.rs
+            if [ ! -f "$x11" ]; then
+              echo "muvm ${pkgs.muvm.version} has no $x11; find where its X11 bridge lives now."
+              exit 1
+            fi
+            if grep -q MIT-SHM "$x11"; then
               echo "muvm ${pkgs.muvm.version} now names MIT-SHM in its own X11 bridge."
               echo "Read what it does there. If it masks or proxies the extension,"
               echo "delete muvm-mask-mit-shm.patch, its override in launcher.nix, and this check."
@@ -217,7 +232,12 @@
           '';
 
           checks.muvm-groups-divergence = pkgs.runCommand "muvm-groups-divergence" { } ''
-            if grep -q setgroups ${pkgs.muvm.src}/crates/muvm/src/guest/user.rs; then
+            user=${pkgs.muvm.src}/crates/muvm/src/guest/user.rs
+            if [ ! -f "$user" ]; then
+              echo "muvm ${pkgs.muvm.version} has no $user; find where the guest's user setup lives now."
+              exit 1
+            fi
+            if grep -q setgroups "$user"; then
               echo "muvm ${pkgs.muvm.version} now sets the supplementary groups itself."
               echo "Read what it claims. If the command in the vm ends up in the host's"
               echo "input group, delete muvm-guest-groups.patch, its line in"
