@@ -48,6 +48,9 @@ main() {
 
   export PRESSURE_VESSEL_EMULATOR="@emulator@"
   export MESA_SHADER_CACHE_MAX_SIZE=50G
+  if [ -n "@compatTools@" ]; then
+    export STEAM_EXTRA_COMPAT_TOOLS_PATHS="@compatTools@${STEAM_EXTRA_COMPAT_TOOLS_PATHS:+:$STEAM_EXTRA_COMPAT_TOOLS_PATHS}"
+  fi
 
   if [ "@guest@" = 1 ]; then
     guest_env=()

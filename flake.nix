@@ -665,6 +665,43 @@
             touch "$out"
           '';
 
+          checks.steam-arm64-compat-tools =
+            let
+              tool =
+                pkgs.runCommand "fake-compat-tool"
+                  {
+                    outputs = [
+                      "out"
+                      "steamcompattool"
+                    ];
+                  }
+                  ''
+                    mkdir -p "$out" "$steamcompattool"
+                    touch "$steamcompattool/compatibilitytool.vdf"
+                  '';
+              withTool = launcher: launcher.override { extraCompatTools = [ tool ]; };
+            in
+            pkgs.runCommand "steam-arm64-compat-tools" { } ''
+              for l in ${withTool self'.packages.steam-arm64}/bin/steam-arm64 \
+                ${withTool self'.packages.steam-x86}/bin/steam-x86; do
+                grep -qF 'STEAM_EXTRA_COMPAT_TOOLS_PATHS="${tool.steamcompattool}' "$l" || {
+                  echo "$l does not hand the client the steamcompattool output of a tool it was built with"
+                  exit 1
+                }
+                grep -qF -- '-e "$var=' "$l" || {
+                  echo "$l no longer forwards its environment into the guest, so the tools stay on the host"
+                  exit 1
+                }
+              done
+              for l in ${self'.packages.steam-arm64}/bin/steam-arm64 ${self'.packages.steam-x86}/bin/steam-x86; do
+                grep -qF 'if [ -n "" ]; then' "$l" || {
+                  echo "$l names compatibility tools nobody asked for"
+                  exit 1
+                }
+              done
+              touch "$out"
+            '';
+
           checks.launcher-host-refuses-other-pages =
             pkgs.runCommand "steam-launcher-host-refuses-other-pages" { }
               ''

@@ -14,6 +14,7 @@
   steam-x86-rootfs,
   channel,
   guest ? true,
+  extraCompatTools ? [ ],
 }:
 let
   launcherTarball = fetchurl {
@@ -64,11 +65,19 @@ runCommand
         getconf = lib.optionalString (!guest) (lib.getExe' glibc "getconf");
         fhs = "${steam-arm64-fhs}";
         rootfs = lib.optionalString guest "${steam-x86-rootfs}";
+        compatTools = lib.makeSearchPathOutput "steamcompattool" "" extraCompatTools;
         inherit channel;
       }
     } "$out/bin/steam-arm64"
 
     ln -s "$out/bin/steam-arm64" "$out/bin/steam"
+
+    for tool in ${lib.escapeShellArgs (map (lib.getOutput "steamcompattool") extraCompatTools)}; do
+      test -f "$tool/compatibilitytool.vdf" || {
+        echo "$tool is not a Steam compatibility tool: no compatibilitytool.vdf at its root" >&2
+        exit 1
+      }
+    done
 
     ${lib.optionalString guest "test -s ${steam-x86-rootfs}"}
 

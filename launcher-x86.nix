@@ -13,6 +13,7 @@
   steam-x86-rootfs,
   fex-emulator-x86,
   guest ? true,
+  extraCompatTools ? [ ],
 }:
 let
   desktopItem = makeDesktopItem {
@@ -53,8 +54,16 @@ runCommand ("steam-x86" + lib.optionalString (!guest) "-host")
         rootfs = lib.optionalString guest "${steam-x86-rootfs}";
         emulator = "${fex-emulator-x86}/emulator.json";
         fhs = "${steam-x86-fhs}";
+        compatTools = lib.makeSearchPathOutput "steamcompattool" "" extraCompatTools;
       }
     } "$out/bin/steam-x86"
+
+    for tool in ${lib.escapeShellArgs (map (lib.getOutput "steamcompattool") extraCompatTools)}; do
+      test -f "$tool/compatibilitytool.vdf" || {
+        echo "$tool is not a Steam compatibility tool: no compatibilitytool.vdf at its root" >&2
+        exit 1
+      }
+    done
 
     ${lib.optionalString guest "test -s ${steam-x86-rootfs}"}
     test -e ${fex-emulator-x86}/emulator.json
