@@ -38,6 +38,37 @@
             config = consumerConfig;
           };
           muvm = pkgs.callPackage ./muvm-patched.nix { inherit (self'.packages) fex-interpreter; };
+          evalModule =
+            {
+              hostSystem ? system,
+              overlay ? true,
+              kernelPages ? null,
+              settings ? { },
+              extra ? { },
+            }:
+            inputs.nixpkgs.lib.nixosSystem {
+              system = hostSystem;
+              modules = [
+                inputs.self.nixosModules.default
+                extra
+                {
+                  nixpkgs.config = consumerConfig;
+                  nixpkgs.overlays = lib.optional overlay inputs.self.overlays.default;
+                  boot.isContainer = true;
+                  boot.kernelPatches = lib.optional (kernelPages != null) {
+                    name = "${kernelPages}-pages";
+                    patch = null;
+                    structuredExtraConfig."ARM64_${kernelPages}_PAGES" = lib.kernel.yes;
+                  };
+                  networking.useHostResolvConf = lib.mkForce false;
+                  system.stateVersion = lib.trivial.release;
+                  programs.steam-arm64 = {
+                    enable = true;
+                  }
+                  // settings;
+                }
+              ];
+            };
         in
         {
           packages.steam-arm64-client = pkgs.callPackage ./package.nix { channel = "stable"; };
@@ -336,6 +367,8 @@
               test -x ${overlaid.steam-arm64}/bin/steam-arm64
               test -x ${overlaid.steam-arm64-beta}/bin/steam-arm64
               test -x ${overlaid.steam-arm64-fhs}/bin/steam-arm64-fhs
+              test -x ${overlaid.steam-x86}/bin/steam-x86
+              test -x ${overlaid.steam-x86-fhs}/bin/steam-x86-fhs
               touch "$out"
             '';
 
@@ -702,6 +735,157 @@
               touch "$out"
             '';
 
+          checks.module-refusals =
+            let
+              ours = sys: map (a: a.message) (lib.filter (a: !a.assertion) sys.config.assertions);
+              refusal =
+                {
+                  name,
+                  expect,
+                  ...
+                }@scenario:
+                let
+                  failed = ours (
+                    evalModule (
+                      builtins.removeAttrs scenario [
+                        "name"
+                        "expect"
+                      ]
+                    )
+                  );
+                  matched = e: lib.filter (lib.hasInfix e) failed;
+                in
+                lib.concatMap (
+                  e:
+                  lib.optional (lib.length (matched e) != 1)
+                    "${name}: wanted one refusal naming '${e}', got ${toString (lib.length (matched e))} among: ${lib.concatStringsSep " | " failed}"
+                ) expect
+                ++
+                  lib.optional (lib.length failed != lib.length expect)
+                    "${name}: ${toString (lib.length failed)} assertions failed, wanted ${toString (lib.length expect)}: ${lib.concatStringsSep " | " failed}";
+              refusals = lib.concatMap refusal [
+                {
+                  name = "an x86-64 host";
+                  hostSystem = "x86_64-linux";
+                  settings.pageSize = 4096;
+                  expect = [ "aarch64 only" ];
+                }
+                {
+                  name = "no overlay";
+                  overlay = false;
+                  settings.pageSize = 4096;
+                  expect = [ "overlays.default" ];
+                }
+                {
+                  name = "a kernel that states no granule and no stated pageSize";
+                  expect = [ "states no ARM64_*_PAGES" ];
+                }
+                {
+                  name = "pageSize 4096 on a 16K kernel";
+                  kernelPages = "16K";
+                  settings.pageSize = 4096;
+                  expect = [ "contradicts the kernel's configuration" ];
+                }
+                {
+                  name = "hostBinfmt on a 16K kernel";
+                  kernelPages = "16K";
+                  settings.hostBinfmt = true;
+                  expect = [ "FEX runs on 4K-page kernels only" ];
+                }
+                {
+                  name = "hostBinfmt beside another x86-64 handler";
+                  kernelPages = "4K";
+                  settings.hostBinfmt = true;
+                  extra.boot.binfmt.registrations.qemu = {
+                    magicOrExtension = ''\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00'';
+                    interpreter = "/bin/true";
+                  };
+                  expect = [ "2 handlers for FEX-x86_64's ELF magic (FEX-x86_64, qemu)" ];
+                }
+                {
+                  name = "the x86 client on a 4K host without hostBinfmt";
+                  kernelPages = "4K";
+                  settings.x86.enable = true;
+                  expect = [ "needs programs.steam-arm64.hostBinfmt" ];
+                }
+              ];
+              hostSys = evalModule {
+                kernelPages = "4K";
+                settings = {
+                  hostBinfmt = true;
+                  x86.enable = true;
+                };
+              };
+              guestSys = evalModule {
+                kernelPages = "16K";
+                settings.x86.enable = true;
+              };
+              hostCfg = hostSys.config;
+              guestCfg = guestSys.config;
+              rendered = builtins.readFile hostCfg.environment.etc."binfmt.d/nixos.conf".source;
+              want = label: cond: lib.optional (!cond) label;
+              wiring =
+                want
+                  "a 4K host with hostBinfmt and x86 passes every assertion: ${lib.concatStringsSep " | " (ours hostSys)}"
+                  (ours hostSys == [ ])
+                ++
+                  want "a 16K kernel with x86 passes every assertion: ${lib.concatStringsSep " | " (ours guestSys)}"
+                    (ours guestSys == [ ])
+                ++ want "the 16K kernel's granule is derived" (guestCfg.programs.steam-arm64.pageSize == 16384)
+                ++ want "the 4K kernel's granule is derived" (hostCfg.programs.steam-arm64.pageSize == 4096)
+                ++ want "the host runs the native client's host launcher" (
+                  hostCfg.programs.steam-arm64.package.name == "steam-arm64-host"
+                )
+                ++ want "the host runs the x86 client's host launcher" (
+                  hostCfg.programs.steam-arm64.x86.package.name == "steam-x86-host"
+                )
+                ++ want "the 16K kernel runs the native client's guest launcher" (
+                  guestCfg.programs.steam-arm64.package.name == "steam-arm64"
+                )
+                ++ want "the 16K kernel runs the x86 client's guest launcher" (
+                  guestCfg.programs.steam-arm64.x86.package.name == "steam-x86"
+                )
+                ++ want "both launchers are installed" (
+                  lib.all (p: lib.elem p hostCfg.environment.systemPackages) [
+                    hostCfg.programs.steam-arm64.package
+                    hostCfg.programs.steam-arm64.x86.package
+                  ]
+                )
+                ++ want "FEX-x86_64 is registered on the x86-64 ELF magic with the F flag, rendered: ${rendered}" (
+                  lib.hasInfix '':FEX-x86_64:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:'' rendered
+                  && lib.hasInfix ":/run/binfmt/FEX-x86_64:PCF" rendered
+                )
+                ++ want "FEX-i386 is registered on the i386 ELF magic with the F flag, rendered: ${rendered}" (
+                  lib.hasInfix '':FEX-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:'' rendered
+                  && lib.hasInfix ":/run/binfmt/FEX-i386:PCF" rendered
+                )
+                ++ want "the handler is FEX's own binary, not a shell wrapper" (
+                  lib.all (r: lib.hasSuffix "/bin/FEX" r.interpreter && !r.wrapInterpreterInShell) (
+                    lib.attrValues hostCfg.boot.binfmt.registrations
+                  )
+                )
+                ++ want "the FEX rootfs is mounted read-only from the pinned EROFS image" (
+                  hostCfg.fileSystems."/run/fex-emu/rootfs".fsType == "erofs"
+                  && lib.hasInfix "steam-x86-fedora-rootfs" hostCfg.fileSystems."/run/fex-emu/rootfs".device
+                  && lib.elem "ro" hostCfg.fileSystems."/run/fex-emu/rootfs".options
+                )
+                ++ want "FEX_ROOTFS is set session-wide" (
+                  hostCfg.environment.sessionVariables.FEX_ROOTFS == "/run/fex-emu/rootfs"
+                )
+                ++ want "a 16K kernel registers no host handler" (guestCfg.boot.binfmt.registrations == { })
+                ++ want "a 16K kernel mounts no rootfs" (!(guestCfg.fileSystems ? "/run/fex-emu/rootfs"))
+                ++ want "a 16K kernel sets no FEX_ROOTFS" (!(guestCfg.environment.sessionVariables ? FEX_ROOTFS));
+              problems = refusals ++ wiring;
+            in
+            pkgs.runCommand "steam-arm64-module-refusals" { } (
+              if problems == [ ] then
+                ''
+                  echo "every refusal fires for its own reason and the host and guest wiring hold" > "$out"
+                ''
+              else
+                lib.concatMapStringsSep "\n" (p: "echo ${lib.escapeShellArg p}") problems + "\nexit 1\n"
+            );
+
           checks.launcher-host-refuses-other-pages =
             pkgs.runCommand "steam-launcher-host-refuses-other-pages" { }
               ''
@@ -799,6 +983,8 @@
           '';
         };
 
+      flake.nixosModules.default = import ./module.nix;
+
       flake.overlays.default = final: prev: {
         muvm = final.callPackage ./muvm-patched.nix { inherit (prev) muvm; };
         steam-arm64-client = final.callPackage ./package.nix { channel = "stable"; };
@@ -808,6 +994,9 @@
         steam-arm64-fhs = final.callPackage ./fhs.nix { };
         steam-x86-rootfs = final.callPackage ./fex-rootfs-x86.nix { };
         fex-interpreter = final.callPackage ./fex-interpreter.nix { };
+        fex-emulator-x86 = final.callPackage ./fex-emulator-x86.nix { };
+        steam-x86-fhs = final.callPackage ./fhs-x86.nix { steam-x86-entry = final.steam-unwrapped; };
+        steam-x86 = final.callPackage ./launcher-x86.nix { };
         steam-arm64 = final.callPackage ./launcher.nix { channel = "stable"; };
         steam-arm64-beta = final.callPackage ./launcher.nix {
           channel = "publicbeta";

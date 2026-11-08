@@ -85,7 +85,39 @@ FEX interpreter in its closure, and `steam-x86-host`
 host's FEX. Both refuse to start on a kernel with any other page size and say
 which package to use instead. Native aarch64 games and Proton (ARM64) run this
 way; x86 Linux games, x86 Proton and the x86 client itself need the FEX rootfs
-and an x86 binfmt handler on the host, which this package does not set up yet.
+and an x86 binfmt handler on the host, which `programs.steam-arm64.hostBinfmt`
+sets up.
+
+## NixOS module
+
+```nix
+{
+  imports = [ inputs.steam-arm64-nix.nixosModules.default ];
+  nixpkgs.overlays = [ inputs.steam-arm64-nix.overlays.default ];
+
+  programs.steam-arm64 = {
+    enable = true;
+    x86.enable = true;
+    extraCompatPackages = [ pkgs.proton-ge ];
+  };
+}
+```
+
+`programs.steam-arm64.pageSize` is read from the kernel's configuration
+(`ARM64_4K_PAGES`, `ARM64_16K_PAGES` or `ARM64_64K_PAGES`); a kernel that states
+none, such as nixpkgs' generic aarch64 kernel, needs it stated with the value
+`getconf PAGESIZE` prints, and a value that contradicts the kernel is refused.
+On 16K and 64K kernels both clients run inside muvm's guest; on a 4K kernel
+they run on the host, and `hostBinfmt = true` registers FEX as the x86-64 and
+i386 binfmt handler (`FEX-x86_64` and `FEX-i386`, opened at registration so
+x86 binaries run inside pressure-vessel's containers), mounts the FEX rootfs
+at `/run/fex-emu/rootfs` and sets `FEX_ROOTFS` for every session. `hostBinfmt`
+is refused off 4K, where FEX cannot run, and beside another handler for the
+same ELF magic, such as `boot.binfmt.emulatedSystems = [ "x86_64-linux" ]`.
+`extraCompatPackages` takes the same tool packages `programs.steam` does, for
+the native client; `x86.extraCompatPackages` takes x86-64 tools for the x86
+client. `checks.module-refusals` evaluates each refusal and the host and guest
+wiring.
 
 ## Usage
 
