@@ -52,9 +52,7 @@ writeShellApplication {
         printf '%s' "$line" | sudo tee /proc/sys/fs/binfmt_misc/register >/dev/null
         echo "host-probe: registered $name"
       fi
-    done <<'REGISTRATIONS'
-    ${registrations}
-    REGISTRATIONS
+    done <${registrations}
 
     if ! mountpoint -q /run/fex-emu/rootfs; then
       sudo mount -t erofs -o ${lib.concatStringsSep "," mountOptions} ${rootfs} /run/fex-emu/rootfs

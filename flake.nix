@@ -119,7 +119,7 @@
                 }).config;
             in
             pkgs.callPackage ./host-probe.nix {
-              registrations = builtins.readFile probed.environment.etc."binfmt.d/nixos.conf".source;
+              registrations = probed.environment.etc."binfmt.d/nixos.conf".source;
               interpreters = lib.mapAttrs (_: r: r.interpreter) probed.boot.binfmt.registrations;
               rootfs = probed.fileSystems."/run/fex-emu/rootfs".device;
               mountOptions = lib.remove "nofail" probed.fileSystems."/run/fex-emu/rootfs".options;
@@ -993,7 +993,6 @@
               };
               hostCfg = hostSys.config;
               guestCfg = guestSys.config;
-              rendered = builtins.readFile hostCfg.environment.etc."binfmt.d/nixos.conf".source;
               want = label: cond: lib.optional (!cond) label;
               wiring =
                 want
@@ -1022,14 +1021,6 @@
                     hostCfg.programs.steam-arm64.x86.package
                   ]
                 )
-                ++ want "FEX-x86_64 is registered on the x86-64 ELF magic with the F flag, rendered: ${rendered}" (
-                  lib.hasInfix '':FEX-x86_64:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:'' rendered
-                  && lib.hasInfix ":/run/binfmt/FEX-x86_64:PCF" rendered
-                )
-                ++ want "FEX-i386 is registered on the i386 ELF magic with the F flag, rendered: ${rendered}" (
-                  lib.hasInfix '':FEX-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:'' rendered
-                  && lib.hasInfix ":/run/binfmt/FEX-i386:PCF" rendered
-                )
                 ++ want "the handler is FEX's own binary, not a shell wrapper" (
                   lib.all (r: lib.hasSuffix "/bin/FEX" r.interpreter && !r.wrapInterpreterInShell) (
                     lib.attrValues hostCfg.boot.binfmt.registrations
@@ -1055,6 +1046,16 @@
             pkgs.runCommand "steam-arm64-module-refusals" { } (
               if problems == [ ] then
                 ''
+                  conf=${hostCfg.environment.etc."binfmt.d/nixos.conf".source}
+                  registered() {
+                    if ! grep -qF -- "$2" "$conf" || ! grep -qF -- "$3" "$conf"; then
+                      echo "$1 is not registered on its ELF magic with the F flag; rendered:"
+                      cat "$conf"
+                      exit 1
+                    fi
+                  }
+                  registered FEX-x86_64 ':FEX-x86_64:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00:' ':/run/binfmt/FEX-x86_64:PCF'
+                  registered FEX-i386 ':FEX-i386:M::\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x03\x00:' ':/run/binfmt/FEX-i386:PCF'
                   echo "every refusal fires for its own reason and the host and guest wiring hold" > "$out"
                 ''
               else
