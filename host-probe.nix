@@ -8,6 +8,7 @@
   registrations,
   interpreters,
   rootfs,
+  mountOptions,
   steam-arm64-host,
   steam-x86-host,
 }:
@@ -56,7 +57,7 @@ writeShellApplication {
     REGISTRATIONS
 
     if ! mountpoint -q /run/fex-emu/rootfs; then
-      sudo mount -t erofs -o loop,ro ${rootfs} /run/fex-emu/rootfs
+      sudo mount -t erofs -o ${lib.concatStringsSep "," mountOptions} ${rootfs} /run/fex-emu/rootfs
     fi
     export FEX_ROOTFS=/run/fex-emu/rootfs
     said=$(/run/fex-emu/rootfs/usr/bin/echo hi)

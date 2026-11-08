@@ -122,6 +122,7 @@
               registrations = builtins.readFile probed.environment.etc."binfmt.d/nixos.conf".source;
               interpreters = lib.mapAttrs (_: r: r.interpreter) probed.boot.binfmt.registrations;
               rootfs = probed.fileSystems."/run/fex-emu/rootfs".device;
+              mountOptions = lib.remove "nofail" probed.fileSystems."/run/fex-emu/rootfs".options;
               steam-arm64-host = probed.programs.steam-arm64.package;
               steam-x86-host = probed.programs.steam-arm64.x86.package;
             };
@@ -1034,10 +1035,14 @@
                     lib.attrValues hostCfg.boot.binfmt.registrations
                   )
                 )
-                ++ want "the FEX rootfs is mounted read-only from the pinned EROFS image" (
+                ++ want "the FEX rootfs is mounted read-only, nosuid and nodev from the pinned EROFS image" (
                   hostCfg.fileSystems."/run/fex-emu/rootfs".fsType == "erofs"
                   && lib.hasInfix "steam-x86-fedora-rootfs" hostCfg.fileSystems."/run/fex-emu/rootfs".device
-                  && lib.elem "ro" hostCfg.fileSystems."/run/fex-emu/rootfs".options
+                  && lib.all (o: lib.elem o hostCfg.fileSystems."/run/fex-emu/rootfs".options) [
+                    "ro"
+                    "nosuid"
+                    "nodev"
+                  ]
                 )
                 ++ want "FEX_ROOTFS is set session-wide" (
                   hostCfg.environment.sessionVariables.FEX_ROOTFS == "/run/fex-emu/rootfs"

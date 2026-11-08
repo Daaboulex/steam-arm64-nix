@@ -175,6 +175,8 @@ in
       options = [
         "loop"
         "ro"
+        "nosuid"
+        "nodev"
         "nofail"
       ];
     };
