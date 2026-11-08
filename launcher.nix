@@ -7,16 +7,16 @@
   makeDesktopItem,
   xrdb,
   util-linux,
+  glibc,
   muvm,
   fex-interpreter,
   steam-arm64-client,
   steam-arm64-fhs,
   steam-x86-rootfs,
   channel,
+  guest ? true,
 }:
 let
-  # Valve ships the application icons in its desktop launcher tarball, not in
-  # the client payload, which carries only tray icons.
   launcherTarball = fetchurl {
     url = "https://repo.steampowered.com/steam/archive/stable/steam_1.0.0.87.tar.gz";
     hash = "sha256-ZJN10vk3f4AJqvPi/wmXgEHrkRSJfZxaOIbx2C4nuh8=";
@@ -36,10 +36,19 @@ let
     ];
   };
 in
-runCommand ("steam-arm64" + lib.optionalString (channel != "stable") "-beta")
+runCommand
+  (
+    "steam-arm64"
+    + lib.optionalString (channel != "stable") "-beta"
+    + lib.optionalString (!guest) "-host"
+  )
   {
     meta = {
-      description = "Valve's aarch64 Steam client, launched in the 4K-page guest its binaries need";
+      description =
+        if guest then
+          "Valve's aarch64 Steam client, launched in the 4K-page guest its binaries need"
+        else
+          "Valve's aarch64 Steam client, launched straight on a host whose kernel uses 4K pages";
       license = lib.licenses.unfree;
       platforms = [ "aarch64-linux" ];
       mainProgram = "steam-arm64";
@@ -49,19 +58,21 @@ runCommand ("steam-arm64" + lib.optionalString (channel != "stable") "-beta")
     install -Dm755 ${
       replaceVars ./launcher.sh {
         client = "${steam-arm64-client}";
-        muvm = lib.getExe muvm;
+        guest = if guest then "1" else "0";
+        muvm = lib.optionalString guest (lib.getExe muvm);
         xrdb = lib.getExe' xrdb "xrdb";
-        flock = lib.getExe' util-linux "flock";
-        fexbin = "${fex-interpreter}/bin";
+        flock = lib.optionalString guest (lib.getExe' util-linux "flock");
+        getconf = lib.optionalString (!guest) (lib.getExe' glibc "getconf");
+        fexbin = lib.optionalString guest "${fex-interpreter}/bin";
         fhs = "${steam-arm64-fhs}";
-        rootfs = "${steam-x86-rootfs}";
+        rootfs = lib.optionalString guest "${steam-x86-rootfs}";
         inherit channel;
       }
     } "$out/bin/steam-arm64"
 
     ln -s "$out/bin/steam-arm64" "$out/bin/steam"
 
-    test -s ${steam-x86-rootfs}
+    ${lib.optionalString guest "test -s ${steam-x86-rootfs}"}
 
     ${gnutar}/bin/tar -xzf ${launcherTarball} --strip-components=1 steam-launcher/icons
     for size in 16 24 32 48 256; do

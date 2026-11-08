@@ -14,7 +14,7 @@ steam_root="${STEAM_ARM64_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/Steam}"
 # guest's mounts, so a guest another command started has no FEX rootfs and the
 # graphics provider named for Valve's FEX tool points at nothing.
 if [ -n "${STEAM_COMPAT_GRAPHICS_PROVIDER:-}" ] && [ ! -f "$STEAM_COMPAT_GRAPHICS_PROVIDER" ]; then
-  echo "steam-arm64: $STEAM_COMPAT_GRAPHICS_PROVIDER is not in this guest; x86 games will not start until the running muvm guest exits and Steam starts one of its own" >&2
+  echo "steam-arm64: $STEAM_COMPAT_GRAPHICS_PROVIDER is missing, so x86 games will not start: in muvm's guest, the running guest was started by another command and has no FEX rootfs until it exits; on the host, programs.steam-arm64.hostBinfmt mounts it" >&2
 fi
 
 # The guest has no session bus of its own and the client's launcher service
@@ -28,14 +28,15 @@ system_bus="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/system_bus"
 if [ -S "$system_bus" ] && DBUS_SYSTEM_BUS_ADDRESS="unix:path=$system_bus" dbus-send --system \
   --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames >/dev/null 2>&1; then
   export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$system_bus"
-else
-  echo "steam-arm64: the host's system bus is not reachable from the guest; Steam cannot read the network state" >&2
+elif ! dbus-send --system --print-reply --dest=org.freedesktop.DBus \
+  / org.freedesktop.DBus.ListNames >/dev/null 2>&1; then
+  echo "steam-arm64: no system bus answers; Steam cannot read the network state" >&2
 fi
 
 if [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
   if ! dbus-send --session --print-reply --dest=org.freedesktop.DBus \
     / org.freedesktop.DBus.ListNames >/dev/null 2>&1; then
-    echo "steam-arm64: the desktop bus is not reachable from the guest" >&2
+    echo "steam-arm64: the desktop bus does not answer" >&2
     unset DBUS_SESSION_BUS_ADDRESS
   fi
 fi
@@ -64,11 +65,11 @@ if [ "${1:-}" = "--doctor" ]; then
     fi
   }
   tools="$steam_root/steamapps/common"
-  check "guest runs on 4K pages" test "$(getconf PAGESIZE)" = 4096
-  check "x86-64 binfmt handler registered in the guest" test -f /proc/sys/fs/binfmt_misc/FEX-x86_64
+  check "the client runs on 4K pages" test "$(getconf PAGESIZE)" = 4096
+  check "x86-64 binfmt handler registered" test -f /proc/sys/fs/binfmt_misc/FEX-x86_64
   check "FEX rootfs mounted" test -d /run/fex-emu/rootfs/usr/lib64
   check "graphics provider named and present" test -f "${STEAM_COMPAT_GRAPHICS_PROVIDER:-/nonexistent}"
-  check "an x86-64 binary runs through the rootfs" env FEX_ROOTFS=/run/fex-emu/rootfs /run/fex-emu/rootfs/usr/bin/true
+  check "an x86-64 binary runs through the rootfs" test "$(FEX_ROOTFS=/run/fex-emu/rootfs /run/fex-emu/rootfs/usr/bin/echo hi 2>/dev/null)" = hi
   check "python3 for Valve's FEX tool" command -v python3
   check "cursor theme path handed in" test -n "${XCURSOR_PATH:-}"
   check "session bus answers" dbus-send --session --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames
@@ -111,11 +112,11 @@ if [ "${1:-}" = "--doctor" ]; then
   else
     gamepads=0
   fi
-  printf 'info  gamepads forwarded by muvm into the guest: %s (attach one on the host and it appears here)\n' "$gamepads"
+  printf 'info  gamepads the client can see: %s (in the guest, muvm forwards each one attached on the host)\n' "$gamepads"
   if grep -q binder /proc/filesystems 2>/dev/null; then
-    printf 'info  guest kernel offers binder, the Android layer could be tried\n'
+    printf 'info  the kernel offers binder, the Android layer could be tried\n'
   else
-    printf 'info  guest kernel has no binder, so the Android layer (Lepton) cannot run here\n'
+    printf 'info  the kernel has no binder, so the Android layer (Lepton) cannot run here\n'
   fi
   if [ -s "$steam_root/package/beta" ]; then
     printf 'info  client channel: %s, from package/beta, which the client owns after the first install\n' "$(head -1 "$steam_root/package/beta")"

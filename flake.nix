@@ -23,7 +23,12 @@
       imports = [ inputs.std.flakeModules.base ];
 
       perSystem =
-        { system, self', ... }:
+        {
+          system,
+          self',
+          lib,
+          ...
+        }:
         let
           consumerConfig = {
             allowUnfree = true;
@@ -78,6 +83,8 @@
             steam-arm64-client = self'.packages.steam-arm64-client-beta;
             inherit (self'.packages) steam-arm64-fhs steam-x86-rootfs fex-interpreter;
           };
+          packages.steam-arm64-host = self'.packages.steam-arm64.override { guest = false; };
+          packages.steam-x86-host = self'.packages.steam-x86.override { guest = false; };
 
           pre-commit.settings.hooks = {
             trim-trailing-whitespace.excludes = [ "\\.patch$" ];
@@ -505,6 +512,99 @@
             fi
             touch "$out"
           '';
+
+          checks.steam-arm64-host-wiring =
+            let
+              getconf = lib.getExe' pkgs.glibc "getconf";
+              hosts = {
+                steam-arm64 = {
+                  launcher = "${self'.packages.steam-arm64-host}/bin/steam-arm64";
+                  closure = pkgs.closureInfo { rootPaths = [ self'.packages.steam-arm64-host ]; };
+                  guestOnly = "-muvm- -steam-x86-fedora-rootfs -fex-interpreter";
+                  wanted = [
+                    "STEAM_COMPAT_GRAPHICS_PROVIDER=/run/fex-emu/rootfs/graphics_provider.json"
+                    "${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs"
+                  ];
+                };
+                steam-x86 = {
+                  launcher = "${self'.packages.steam-x86-host}/bin/steam-x86";
+                  closure = pkgs.closureInfo { rootPaths = [ self'.packages.steam-x86-host ]; };
+                  guestOnly = "-muvm- -steam-x86-fedora-rootfs";
+                  wanted = [
+                    "PRESSURE_VESSEL_EMULATOR=\"${self'.packages.fex-emulator-x86}/emulator.json\""
+                    "${self'.packages.steam-x86-fhs}/bin/steam-x86-fhs"
+                  ];
+                };
+              };
+            in
+            pkgs.runCommand "steam-arm64-host-wiring" { } (
+              lib.concatStrings (
+                lib.mapAttrsToList (name: host: ''
+                  for leaves in ${host.guestOnly}; do
+                    if grep -qF -- "$leaves" ${host.closure}/store-paths; then
+                      echo "the ${name} host launcher still carries $leaves, which only muvm's guest uses"
+                      exit 1
+                    fi
+                  done
+                  l=${host.launcher}
+                  for wanted in ${
+                    lib.escapeShellArgs (
+                      host.wanted
+                      ++ [
+                        "\"${getconf}\" PAGESIZE"
+                        "MESA_SHADER_CACHE_MAX_SIZE=50G"
+                      ]
+                    )
+                  }; do
+                    grep -qF -- "$wanted" "$l" || {
+                      echo "the ${name} host launcher lost $wanted"
+                      exit 1
+                    }
+                  done
+                  grep -qF 'if [ "0" = 1 ]; then' "$l" || {
+                    echo "the ${name} host launcher was not built with guest = false"
+                    exit 1
+                  }
+                '') hosts
+              )
+              + ''
+                touch "$out"
+              ''
+            );
+
+          checks.launcher-host-refuses-other-pages =
+            pkgs.runCommand "steam-launcher-host-refuses-other-pages" { }
+              ''
+                for l in ${self'.packages.steam-arm64-host}/bin/steam-arm64 ${self'.packages.steam-x86-host}/bin/steam-x86; do
+                  if ! (
+                    source "$l"
+                    require_4k_pages 4096
+                  ); then
+                    echo "$l refuses a 4096-byte page kernel, the one it is for"
+                    exit 1
+                  fi
+                  for pages in 16384 65536; do
+                    if (
+                      source "$l"
+                      require_4k_pages "$pages" 2>"$TMPDIR/refusal"
+                    ); then
+                      echo "$l accepts a $pages-byte page kernel, where Valve's client and FEX cannot run"
+                      exit 1
+                    fi
+                    grep -qF -- "$pages-byte pages" "$TMPDIR/refusal" || {
+                      echo "$l refuses $pages-byte pages without naming them:"
+                      cat "$TMPDIR/refusal"
+                      exit 1
+                    }
+                    grep -qF "muvm's 4K-page guest" "$TMPDIR/refusal" || {
+                      echo "$l refuses without naming the guest launcher to run instead:"
+                      cat "$TMPDIR/refusal"
+                      exit 1
+                    }
+                  done
+                done
+                touch "$out"
+              '';
 
           checks.client-tree = pkgs.runCommand "steam-arm64-client-tree" { } ''
             test -d ${self'.packages.default}/steamrtarm64/libs

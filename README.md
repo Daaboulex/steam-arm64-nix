@@ -73,6 +73,20 @@ client owns that file: its own settings switch the channel, and the launcher
 never rewrites it. Both clients in the shared root read the same file, so the
 x86 client follows the same channel.
 
+## Running on a 4K-page kernel
+
+Valve's binaries need 4K pages, which is why `steam-arm64` starts the client
+in muvm's guest, and FEX needs them too, which is why `steam-x86` does. On an
+aarch64 host whose kernel already uses 4K pages the guest is not needed:
+`steam-arm64-host` (`pkgs.steam-arm64.override { guest = false; }`) runs the
+native client straight in its FHS sandbox, with no muvm, no x86 rootfs and no
+FEX interpreter in its closure, and `steam-x86-host`
+(`pkgs.steam-x86.override { guest = false; }`) runs the x86 client under the
+host's FEX. Both refuse to start on a kernel with any other page size and say
+which package to use instead. Native aarch64 games and Proton (ARM64) run this
+way; x86 Linux games, x86 Proton and the x86 client itself need the FEX rootfs
+and an x86 binfmt handler on the host, which this package does not set up yet.
+
 ## Usage
 
 The package is the unpacked client tree; its entry point is `steamrtarm64/steam`.
