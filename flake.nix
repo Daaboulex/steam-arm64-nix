@@ -430,34 +430,62 @@
 
           checks.remote-play-ports-published =
             let
-              ports = import ./ports.nix;
-              firewall =
+              ours =
                 settings:
                 (evalModule {
                   kernelPages = "16K";
                   inherit settings;
                 }).config.networking.firewall;
-              opened = firewall {
-                remotePlay.openFirewall = true;
-                localNetworkGameTransfers.openFirewall = true;
+              nixpkgs' =
+                settings:
+                (inputs.nixpkgs.lib.nixosSystem {
+                  system = "x86_64-linux";
+                  modules = [
+                    {
+                      nixpkgs.config = consumerConfig;
+                      boot.isContainer = true;
+                      networking.useHostResolvConf = lib.mkForce false;
+                      system.stateVersion = lib.trivial.release;
+                      programs.steam = {
+                        enable = true;
+                      }
+                      // settings;
+                    }
+                  ];
+                }).config.networking.firewall;
+              combos = {
+                "both options" = {
+                  remotePlay.openFirewall = true;
+                  localNetworkGameTransfers.openFirewall = true;
+                };
+                "remotePlay alone" = {
+                  remotePlay.openFirewall = true;
+                };
+                "localNetworkGameTransfers alone" = {
+                  localNetworkGameTransfers.openFirewall = true;
+                };
+                "neither" = { };
               };
-              closed = firewall { };
-              every = proto: ports.remotePlay.${proto} ++ ports.localNetworkGameTransfers.${proto};
-              want = label: cond: lib.optional (!cond) label;
-              problems =
-                want "both firewall options open every TCP port ports.nix names" (
-                  lib.all (p: lib.elem p opened.allowedTCPPorts) (every "tcp")
-                )
-                ++ want "both firewall options open every UDP port ports.nix names" (
-                  lib.all (p: lib.elem p opened.allowedUDPPorts) (every "udp")
-                )
-                ++ want "with both options off the module opens none of them" (
-                  !lib.any (p: lib.elem p closed.allowedTCPPorts) (every "tcp")
-                  && !lib.any (p: lib.elem p closed.allowedUDPPorts) (every "udp")
-                )
-                ++ want "every firewall port is one the launchers publish" (
-                  lib.all (p: lib.elem "${toString p}:${toString p}" ports.published) (every "tcp")
-                  && lib.all (p: lib.elem "${toString p}:${toString p}/udp" ports.published) (every "udp")
+              sorted = lib.sort lib.lessThan;
+              rangesOf = map (r: "${toString r.from}-${toString r.to}");
+              differs =
+                label: settings:
+                let
+                  mine = ours settings;
+                  theirs = nixpkgs' settings;
+                  show =
+                    fw:
+                    "TCP ${toString (sorted fw.allowedTCPPorts)}; UDP ${toString (sorted fw.allowedUDPPorts)}; UDP ranges ${toString (rangesOf fw.allowedUDPPortRanges)}";
+                in
+                lib.optional (show mine != show theirs)
+                  "${label}: programs.steam-arm64 opens ${show mine} but nixpkgs' programs.steam opens ${show theirs}";
+              problems = lib.concatLists (lib.mapAttrsToList differs combos);
+              everything = nixpkgs' combos."both options";
+              expand = r: lib.range r.from r.to;
+              published =
+                map (p: "${toString p}:${toString p}") everything.allowedTCPPorts
+                ++ map (p: "${toString p}:${toString p}/udp") (
+                  everything.allowedUDPPorts ++ lib.concatMap expand everything.allowedUDPPortRanges
                 );
             in
             pkgs.runCommand "steam-remote-play-ports-published" { } (
@@ -465,7 +493,7 @@
               + lib.optionalString (problems != [ ]) "\nexit 1\n"
               + ''
                 for l in ${self'.packages.steam-arm64}/bin/steam-arm64 ${self'.packages.steam-x86}/bin/steam-x86; do
-                  for p in ${lib.escapeShellArgs ports.published}; do
+                  for p in ${lib.escapeShellArgs published}; do
                     if ! grep -qF -- "-p $p" "$l"; then
                       echo "$l no longer publishes $p: passt cannot carry the guest's own LAN"
                       echo "broadcast, so a Steam Link, Remote Play or game-transfer peer on the LAN"

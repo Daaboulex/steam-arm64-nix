@@ -25,17 +25,25 @@ let
   host = pageSize == 4096;
   fexRootfs = "/run/fex-emu/rootfs";
   ports = import ./ports.nix;
-  portList = proto: feature: lib.concatMapStringsSep ", " toString ports.${feature}.${proto};
+  portText =
+    feature:
+    lib.concatStringsSep ", " (
+      map (p: "TCP ${toString p}") feature.tcp
+      ++ map (p: "UDP ${toString p}") feature.udp
+      ++ map (r: "UDP ${toString r.from} to ${toString r.to}") feature.udpRanges
+    );
   openFirewall =
     feature: what:
     lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "open TCP ${portList "tcp" feature} and UDP ${portList "udp" feature} on the host's firewall for ${what}; both launchers publish the same ports out of muvm's guest, from the one list in ports.nix";
+      description = "open ${portText ports.${feature}} and the discovery port ${portText ports.discovery} on the host's firewall for ${what}: the ports nixpkgs' programs.steam opens for the same option. Both launchers publish the same ports out of muvm's guest, from the one list in ports.nix";
     };
+  anyFirewall = cfg.remotePlay.openFirewall || cfg.localNetworkGameTransfers.openFirewall;
   openedPorts =
     proto:
-    lib.optionals cfg.remotePlay.openFirewall ports.remotePlay.${proto}
+    lib.optionals anyFirewall ports.discovery.${proto}
+    ++ lib.optionals cfg.remotePlay.openFirewall ports.remotePlay.${proto}
     ++
       lib.optionals cfg.localNetworkGameTransfers.openFirewall
         ports.localNetworkGameTransfers.${proto};
@@ -176,6 +184,7 @@ in
     networking.firewall = {
       allowedTCPPorts = openedPorts "tcp";
       allowedUDPPorts = openedPorts "udp";
+      allowedUDPPortRanges = openedPorts "udpRanges";
     };
   };
 }
