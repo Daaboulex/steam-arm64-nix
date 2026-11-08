@@ -114,7 +114,11 @@ if [ "${1:-}" = "--doctor" ]; then
   fi
   if [ -n "${STEAM_EXTRA_COMPAT_TOOLS_PATHS:-}" ]; then
     for dir in ${STEAM_EXTRA_COMPAT_TOOLS_PATHS//:/ }; do
-      check "extra tool ${dir##*/} complete" test -f "$dir/toolmanifest.vdf" -a -f "$dir/compatibilitytool.vdf" -a -x "$dir/proton"
+      shown=""
+      if [ -f "$dir/compatibilitytool.vdf" ]; then
+        shown=$(sed -n '/"display_name"/{s/^[[:space:]]*"display_name"[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p;q;}' "$dir/compatibilitytool.vdf")
+      fi
+      check "extra tool ${shown:-${dir%/}} complete" test -f "$dir/toolmanifest.vdf" -a -f "$dir/compatibilitytool.vdf" -a -x "$dir/proton"
     done
   else
     printf 'none  extra compatibility tools handed in\n'
