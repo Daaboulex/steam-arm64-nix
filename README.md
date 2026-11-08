@@ -137,7 +137,7 @@ M1 row and the runner row are verified.
 | Apple M1, M2 (Asahi) | 16K | guest; GPU through muvm's native context (Asahi 7.1.5's regression fixed 2026-09-11) | yes, the M1 this is developed on |
 | Apple M3 (Asahi) | 16K | guest; Asahi says not to expect performant 3D yet (2026-09-06), so likely software GPU | no |
 | Apple M4 and later | no Asahi kernel | none | no |
-| Snapdragon X Elite, X Plus, X13s, SDM845 phones (Pocophone F1, Pixel 3) | 4K on mainline | host: `steam-arm64-host` and `steam-x86-host` with `hostBinfmt`; turnip Vulkan | the contributor's Pocophone F1 ran PR #6's host path (2026-11-07); this module's build is not yet |
+| Snapdragon X Elite, X Plus, X13s, SDM845 phones (Pocophone F1, Pixel 3) | 4K on mainline | host: `steam-arm64-host` and `steam-x86-host` with `hostBinfmt`; turnip Vulkan | the contributor's report in his PR #6 comment of 2026-11-07: on his Pocophone F1 everything works, the x86-64 runtime runs well and so does ARM64 Proton, with PR #6's host path; a report, not a doctor transcript, and this module's build has not run there |
 | Raspberry Pi 5 | 16K with `kernel_2712.img`, 4K with `kernel8.img` | guest with software GPU (v3d has no muvm native context), or host on the 4K kernel | no |
 | Raspberry Pi 4 | 4K | host; v3dv Vulkan 1.2 | no |
 | RK3588 (Mali-G610, PanVK) | 4K | host | no |
