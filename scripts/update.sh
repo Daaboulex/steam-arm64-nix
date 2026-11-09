@@ -4,8 +4,8 @@ set -euo pipefail
 OUTPUT_FILE="${GITHUB_OUTPUT:-/tmp/update-outputs.env}"
 : >"$OUTPUT_FILE"
 output() { echo "$1=$2" >>"$OUTPUT_FILE"; }
-log() { echo "==> $*"; }
-err() { echo "::error::$*"; }
+log() { echo "==> $*" >&2; }
+err() { echo "::error::$*" >&2; }
 
 readonly BASE_URL="https://client-update.fastly.steamstatic.com"
 readonly RUNTIME_BASE="https://repo.steampowered.com/steamrt3c/images"
