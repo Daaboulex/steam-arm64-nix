@@ -138,11 +138,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1794144446,
-        "narHash": "sha256-H5JXzPOhAmXZdJmgzTONYfrt326PMGHVgQbasSIef7E=",
+        "lastModified": 1794250561,
+        "narHash": "sha256-sOM3Tz276fyxEMEEf9PnA/8diA3CfOrxZZWtot8rHD4=",
         "owner": "Daaboulex",
         "repo": "nix-packaging-standard",
-        "rev": "36fed310b9bf330b80562fcfd4a631bf3f5ac6de",
+        "rev": "0df9a6c4c4b428ec4664fb0e47cc030f5a3e3985",
         "type": "github"
       },
       "original": {
