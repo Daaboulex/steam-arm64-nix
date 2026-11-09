@@ -43,7 +43,8 @@ writeShellApplication {
     if ! mountpoint -q /proc/sys/fs/binfmt_misc; then
       sudo mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc
     fi
-    while IFS= read -r line; do
+    mapfile -t lines <${registrations}
+    for line in "''${lines[@]}"; do
       [ -n "$line" ] || continue
       name=$(cut -d: -f2 <<<"$line")
       if [ -e "/proc/sys/fs/binfmt_misc/$name" ]; then
@@ -52,7 +53,13 @@ writeShellApplication {
         printf '%s' "$line" | sudo tee /proc/sys/fs/binfmt_misc/register >/dev/null
         echo "host-probe: registered $name"
       fi
-    done <${registrations}
+    done
+    for name in ${lib.escapeShellArgs (lib.attrNames interpreters)}; do
+      if [ ! -e "/proc/sys/fs/binfmt_misc/$name" ]; then
+        echo "host-probe: $name is not registered after reading ${registrations}" >&2
+        exit 1
+      fi
+    done
 
     if ! mountpoint -q /run/fex-emu/rootfs; then
       sudo mount -t erofs -o ${lib.concatStringsSep "," mountOptions} ${rootfs} /run/fex-emu/rootfs
