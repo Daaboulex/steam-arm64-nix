@@ -14,6 +14,7 @@
   steam-x86-rootfs,
   channel,
   guest ? true,
+  forcePage ? false,
   extraCompatTools ? [ ],
 }:
 let
@@ -59,6 +60,7 @@ runCommand
       replaceVars ./launcher.sh {
         client = "${steam-arm64-client}";
         guest = if guest then "1" else "0";
+        forcePage = if forcePage then "1" else "0";
         muvm = lib.optionalString guest (lib.getExe muvm);
         xrdb = lib.getExe' xrdb "xrdb";
         flock = lib.optionalString guest (lib.getExe' util-linux "flock");

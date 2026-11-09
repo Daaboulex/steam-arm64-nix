@@ -72,6 +72,7 @@ let
     launcher: tools:
     launcher.override {
       guest = !host;
+      forcePage = cfg.pageSizeForce;
       extraCompatTools = tools;
     };
 in
@@ -88,6 +89,11 @@ in
     pageSize = lib.mkOption {
       type = lib.types.enum (lib.attrValues granules);
       description = "the kernel's page size in bytes, which decides whether the clients run on the host (4096) or inside muvm's guest. Derived from the kernel's configuration when it states ARM64_4K_PAGES, ARM64_16K_PAGES or ARM64_64K_PAGES; state it only when the kernel does not, with the value getconf PAGESIZE prints";
+    };
+    pageSizeForce = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "forces pageSize regardless of system page size";
     };
     hostBinfmt = lib.mkOption {
       type = lib.types.bool;
@@ -133,7 +139,11 @@ in
         message = "programs.steam-arm64: nixpkgs.overlays lacks steam-arm64-nix's overlays.default, which provides steam-arm64, steam-x86 and steam-x86-rootfs";
       }
       {
-        assertion = pageSize != null && lib.all (k: k == pageSize) kernelPageSizes;
+        assertion =
+          if cfg.pageSizeForce == false then
+            lib.all (k: k == pageSize) kernelPageSizes && pageSize != null
+          else
+            pageSize != null;
         message =
           if pageSize == null then
             "programs.steam-arm64.pageSize: the kernel's configuration (${kernel.name}) states ${

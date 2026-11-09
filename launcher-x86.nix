@@ -13,6 +13,7 @@
   steam-x86-rootfs,
   fex-emulator-x86,
   guest ? true,
+  forcePage ? false,
   extraCompatTools ? [ ],
 }:
 let
@@ -49,6 +50,7 @@ runCommand ("steam-x86" + lib.optionalString (!guest) "-host")
         guest = if guest then "1" else "0";
         muvm = lib.optionalString guest (lib.getExe muvm);
         xrdb = lib.getExe' xrdb "xrdb";
+        forcePage = if forcePage then "1" else "0";
         flock = lib.optionalString guest (lib.getExe' util-linux "flock");
         getconf = lib.optionalString (!guest) (lib.getExe' glibc "getconf");
         rootfs = lib.optionalString guest "${steam-x86-rootfs}";

@@ -25,7 +25,7 @@ cursor_from_desktop() {
 }
 
 require_4k_pages() {
-  if [ "$1" != 4096 ]; then
+  if [ "$1" != 4096 ] && [ "@forcePage@" != "1" ]; then
     echo "steam-arm64: this kernel uses $1-byte pages and Valve's client needs 4096; this is the steam-arm64-host package, built for a 4K kernel: install steam-arm64 instead, which starts the client in muvm's 4K-page guest, or let programs.steam-arm64 pick by pageSize" >&2
     return 1
   fi
