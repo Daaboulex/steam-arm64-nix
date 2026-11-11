@@ -94,7 +94,7 @@ in
     pageSwitch = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
       default = null;
-      description = "a program that runs a command with 4K pages on a kernel whose own pages are larger, called as `<program> 4k <command> <args>`: the userpages launcher of a kernel built with per-program page sizes (aurora-linux-nixos's packages.userpages for omacom's Aurora kernel, booted with user4k=on). Each launch first asks it for 4K pages and runs the clients on the host only when a program started through it reports 4096; otherwise they run in muvm's guest as without it. Null, the default, adds nothing to the closure";
+      description = "a program that runs a command with 4K pages on a kernel whose own pages are larger, called as `<program> 4k <command> <args>`, as a kernel built with per-program page sizes may provide one. This package ships no such program and names none to use. Each launch first asks it for 4K pages and runs the clients on the host only when a program started through it reports 4096; otherwise they run in muvm's guest as without it. Null, the default, adds nothing to the closure";
     };
     hostBinfmt = lib.mkOption {
       type = lib.types.bool;

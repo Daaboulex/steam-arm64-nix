@@ -99,11 +99,14 @@ pages. Only when that program reports 4096 does the client run on the host
 under the switch, which hands the 4K preference to everything Steam starts,
 FEX and games included; else it runs in muvm's guest, or the host-only package
 refuses. Each launch prints which path it took and why. A page switch is a
-program called as `<switch> 4k <command> <args>`; the only kernel with one
-today is omacom's Aurora (`ARM64_USER4K_EXPERIMENTAL`, booted with
-`user4k=on`), whose `userpages` is packaged by aurora-linux-nixos. This package
-reads no kernel flag for it: the switch is passed in, and the launch measures
-whether it works.
+program called as `<switch> 4k <command> <args>`. Mainline Linux has none: a
+per-program page size was discussed upstream in 2026 only for sizes at or
+above the kernel's own. Kernels outside mainline have offered one, such as
+omacom's Aurora fork (`ARM64_USER4K_EXPERIMENTAL`, booted with `user4k=on`,
+with a `userpages` launcher in its source tree) and Google's P3S in Android's
+kernel; neither is reviewed upstream, and this package ships, tests against
+and vouches for none of them. It reads no kernel flag: a switch is passed in,
+and each launch measures whether it works.
 
 What each package carries follows from the same facts: `steam-arm64-host` and
 `steam-x86-host` hold no muvm and no VM rootfs (on 2026-11-11, 3.5 GiB and
@@ -132,8 +135,7 @@ none, such as nixpkgs' generic aarch64 kernel, needs it stated with the value
 On a 4K kernel the module installs the host launchers, with no muvm; on 16K
 and 64K kernels it installs the guest launchers, which still run on the host
 when `programs.steam-arm64.pageSwitch` names a page switch that gives a
-program 4K pages at launch (set it to aurora-linux-nixos's
-`packages.<system>.userpages` with an Aurora kernel booted with `user4k=on`;
+program 4K pages at launch (the module takes any such program and names none;
 it is refused on a 4K kernel, where it would never be asked). `hostBinfmt = true` registers FEX as the x86-64 and
 i386 binfmt handler (`FEX-x86_64` and `FEX-i386`, opened at registration so
 x86 binaries run inside pressure-vessel's containers), mounts the FEX rootfs
@@ -160,7 +162,7 @@ M1 row and the runner row are verified.
 | Device | Kernel pages | Path here | Verified |
 |---|---|---|---|
 | Apple M1, M2 (Asahi) | 16K | guest; GPU through muvm's native context (Asahi 7.1.5's regression fixed 2026-09-11) | yes, the M1 this is developed on |
-| Apple M1 and later on omacom's Aurora kernel, booted with `user4k=on` | 16K, with 4K per program | host through `pageSwitch` (Aurora's `userpages`), guest when the switch refuses | no; the contributor of PR 8 reports `userpages 4k steam` running on it, before this package had the path |
+| Apple M1 and later on a kernel outside mainline with per-program 4K pages | 16K, with 4K per program where the kernel allows it | host through `pageSwitch` when the switch gives 4K pages at launch, guest otherwise | no; pull request 8's contributor reports Steam running this way on omacom's Aurora fork, a report this package has not reproduced |
 | Apple M3 (Asahi) | 16K | guest; Asahi says not to expect performant 3D yet (2026-09-06), so likely software GPU | no |
 | Apple M4 and later | no Asahi kernel | none | no |
 | Snapdragon X Elite, X Plus, X13s, SDM845 phones (Pocophone F1, Pixel 3) | 4K on mainline | host: `steam-arm64-host` and `steam-x86-host` with `hostBinfmt`; turnip Vulkan | the contributor's report in his PR #6 comment of 2026-11-07: on his Pocophone F1 everything works, the x86-64 runtime runs well and so does ARM64 Proton, with PR #6's host path; a report, not a doctor transcript, and this module's build has not run there |
