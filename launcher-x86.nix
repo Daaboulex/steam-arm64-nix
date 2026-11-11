@@ -13,6 +13,7 @@
   steam-x86-rootfs,
   fex-emulator-x86,
   guest ? true,
+  pageSwitch ? null,
   extraCompatTools ? [ ],
 }:
 let
@@ -35,9 +36,9 @@ runCommand ("steam-x86" + lib.optionalString (!guest) "-host")
     meta = {
       description =
         if guest then
-          "Valve's x86 Steam client, translated by FEX inside a 4K-page guest, in the FHS layout pressure-vessel needs"
+          "Valve's x86 Steam client, translated by FEX with the 4K pages it needs: on the host when the kernel or the page switch gives them, otherwise inside muvm's 4K-page guest, in the FHS layout pressure-vessel needs"
         else
-          "Valve's x86 Steam client, translated by the host's FEX on a 4K-page kernel, in the FHS layout pressure-vessel needs";
+          "Valve's x86 Steam client, translated by the host's FEX on a kernel or page switch that gives it 4K pages, in the FHS layout pressure-vessel needs";
       license = lib.licenses.unfree;
       platforms = [ "aarch64-linux" ];
       mainProgram = "steam-x86";
@@ -50,7 +51,8 @@ runCommand ("steam-x86" + lib.optionalString (!guest) "-host")
         muvm = lib.optionalString guest (lib.getExe muvm);
         xrdb = lib.getExe' xrdb "xrdb";
         flock = lib.optionalString guest (lib.getExe' util-linux "flock");
-        getconf = lib.optionalString (!guest) (lib.getExe' glibc "getconf");
+        getconf = lib.getExe' glibc "getconf";
+        pageSwitch = lib.optionalString (pageSwitch != null) (lib.getExe pageSwitch);
         rootfs = lib.optionalString guest "${steam-x86-rootfs}";
         ports = lib.optionalString guest (
           lib.concatMapStringsSep " " (p: "-p ${p}") (import ./ports.nix).published

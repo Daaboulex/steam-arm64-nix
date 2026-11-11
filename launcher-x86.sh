@@ -24,11 +24,30 @@ cursor_from_desktop() {
   fi
 }
 
-require_4k_pages() {
-  if [ "$1" != 4096 ]; then
-    echo "steam-x86: this kernel uses $1-byte pages and FEX needs 4096; this is the steam-x86-host package, built for a 4K kernel: install steam-x86 instead, which starts the client in muvm's 4K-page guest, or let programs.steam-arm64 pick by pageSize" >&2
-    return 1
+choose_path() {
+  local native switched refusal
+  native=$("@getconf@" PAGESIZE)
+  if [ "$native" = 4096 ]; then
+    path=host
+    echo "steam-x86: this kernel uses 4K pages, so the client runs under the host's FEX" >&2
+    return 0
   fi
+  refusal="this kernel uses $native-byte pages and FEX needs 4096"
+  if [ -n "@pageSwitch@" ]; then
+    if switched=$("@pageSwitch@" 4k "@getconf@" PAGESIZE 2>&1) && [ "$switched" = 4096 ]; then
+      path=switch
+      echo "steam-x86: this kernel uses $native-byte pages and @pageSwitch@ gives a program 4K pages, so the client runs under the host's FEX with them" >&2
+      return 0
+    fi
+    refusal="$refusal, and @pageSwitch@ did not give a program 4K pages (it printed: ${switched:-nothing})"
+  fi
+  if [ "@guest@" = 1 ]; then
+    path=guest
+    echo "steam-x86: $refusal, so the client runs in muvm's 4K-page guest" >&2
+    return 0
+  fi
+  echo "steam-x86: $refusal; this is the steam-x86-host package, built without muvm's guest: install steam-x86 instead, which starts the client in muvm's 4K-page guest, or let programs.steam-arm64 pick by pageSize" >&2
+  return 1
 }
 
 stdin_as_pipe() {
@@ -52,7 +71,8 @@ main() {
     export STEAM_EXTRA_COMPAT_TOOLS_PATHS="@compatTools@${STEAM_EXTRA_COMPAT_TOOLS_PATHS:+:$STEAM_EXTRA_COMPAT_TOOLS_PATHS}"
   fi
 
-  if [ "@guest@" = 1 ]; then
+  choose_path
+  if [ "$path" = guest ]; then
     guest_env=()
     for var in PRESSURE_VESSEL_EMULATOR MESA_SHADER_CACHE_MAX_SIZE \
       XCURSOR_THEME XCURSOR_SIZE XCURSOR_PATH DBUS_SESSION_BUS_ADDRESS STEAM_EXTRA_COMPAT_TOOLS_PATHS LOCALE_ARCHIVE; do
@@ -72,7 +92,9 @@ main() {
       "@fhs@/bin/steam-x86-fhs" "$@"
   fi
 
-  require_4k_pages "$("@getconf@" PAGESIZE)"
+  if [ "$path" = switch ]; then
+    exec "@pageSwitch@" 4k "@fhs@/bin/steam-x86-fhs" "$@"
+  fi
   exec "@fhs@/bin/steam-x86-fhs" "$@"
 }
 

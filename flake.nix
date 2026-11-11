@@ -38,6 +38,15 @@
             config = consumerConfig;
           };
           muvm = pkgs.callPackage ./muvm-patched.nix { inherit (self'.packages) fex-interpreter; };
+          fakePageSwitch = pkgs.writeShellScriptBin "page-switch" ''
+            [ "$1" = 4k ] || exit 2
+            shift
+            if [ "''${FAKE_SWITCH:-}" = gives ]; then
+              FAKE_PAGESIZE=4096 exec "$@"
+            fi
+            echo "Cannot select 4k userspace pages: Invalid argument" >&2
+            exit 1
+          '';
           evalModule =
             {
               hostSystem ? system,
@@ -961,7 +970,22 @@
                   name = "hostBinfmt on a 16K kernel";
                   kernelPages = "16K";
                   settings.hostBinfmt = true;
-                  expect = [ "FEX runs on 4K-page kernels only" ];
+                  expect = [ "with no pageSwitch to give a program 4K pages" ];
+                }
+                {
+                  name = "pageSwitch on a 4K kernel";
+                  kernelPages = "4K";
+                  settings.pageSwitch = fakePageSwitch;
+                  expect = [ "the switch would never be asked" ];
+                }
+                {
+                  name = "the x86 client with pageSwitch without hostBinfmt";
+                  kernelPages = "16K";
+                  settings = {
+                    pageSwitch = fakePageSwitch;
+                    x86.enable = true;
+                  };
+                  expect = [ "needs programs.steam-arm64.hostBinfmt" ];
                 }
                 {
                   name = "hostBinfmt beside another x86-64 handler";
@@ -991,8 +1015,17 @@
                 kernelPages = "16K";
                 settings.x86.enable = true;
               };
+              switchSys = evalModule {
+                kernelPages = "16K";
+                settings = {
+                  pageSwitch = fakePageSwitch;
+                  hostBinfmt = true;
+                  x86.enable = true;
+                };
+              };
               hostCfg = hostSys.config;
               guestCfg = guestSys.config;
+              switchCfg = switchSys.config;
               want = label: cond: lib.optional (!cond) label;
               wiring =
                 want
@@ -1040,7 +1073,21 @@
                 )
                 ++ want "a 16K kernel registers no host handler" (guestCfg.boot.binfmt.registrations == { })
                 ++ want "a 16K kernel mounts no rootfs" (!(guestCfg.fileSystems ? "/run/fex-emu/rootfs"))
-                ++ want "a 16K kernel sets no FEX_ROOTFS" (!(guestCfg.environment.sessionVariables ? FEX_ROOTFS));
+                ++ want "a 16K kernel sets no FEX_ROOTFS" (!(guestCfg.environment.sessionVariables ? FEX_ROOTFS))
+                ++
+                  want
+                    "a 16K kernel with pageSwitch, hostBinfmt and x86 passes every assertion: ${lib.concatStringsSep " | " (ours switchSys)}"
+                    (ours switchSys == [ ])
+                ++
+                  want
+                    "with pageSwitch both clients keep the guest launcher, muvm being the path when the switch refuses"
+                    (
+                      switchCfg.programs.steam-arm64.package.name == "steam-arm64"
+                      && switchCfg.programs.steam-arm64.x86.package.name == "steam-x86"
+                    )
+                ++ want "with pageSwitch hostBinfmt registers FEX and mounts its rootfs" (
+                  switchCfg.boot.binfmt.registrations ? FEX-x86_64 && switchCfg.fileSystems ? "/run/fex-emu/rootfs"
+                );
               problems = refusals ++ wiring;
             in
             pkgs.runCommand "steam-arm64-module-refusals" { } (
@@ -1120,43 +1167,88 @@
               touch "$out"
             '';
 
-          checks.launcher-host-refuses-other-pages =
-            pkgs.runCommand "steam-launcher-host-refuses-other-pages" { }
-              ''
-                for l in ${self'.packages.steam-arm64-host}/bin/steam-arm64 ${self'.packages.steam-x86-host}/bin/steam-x86; do
-                  if ! (
-                    source "$l"
-                    require_4k_pages 4096
-                  ); then
-                    echo "$l refuses a 4096-byte page kernel, the one it is for"
+          checks.launcher-chooses-a-path =
+            let
+              fakeGetconf = pkgs.writeShellScriptBin "getconf" ''
+                echo "$FAKE_PAGESIZE"
+              '';
+              variant =
+                launcher: args:
+                "${launcher.override ({ glibc = fakeGetconf; } // args)}/bin/${launcher.meta.mainProgram}";
+              launchers =
+                lib.concatMap
+                  (l: [
+                    "guest switch ${variant l { pageSwitch = fakePageSwitch; }}"
+                    "guest none ${variant l { }}"
+                    "host switch ${
+                      variant l {
+                        guest = false;
+                        pageSwitch = fakePageSwitch;
+                      }
+                    }"
+                    "host none ${variant l { guest = false; }}"
+                  ])
+                  [
+                    self'.packages.steam-arm64
+                    self'.packages.steam-x86
+                  ];
+            in
+            pkgs.runCommand "steam-launcher-chooses-a-path" { } ''
+              expect() {
+                local l=$1 pages=$2 switch=$3 want=$4 got status=0
+                got=$(FAKE_PAGESIZE=$pages FAKE_SWITCH=$switch bash -c 'source "$1"; choose_path; echo "$path"' _ "$l" 2>"$TMPDIR/said") || status=$?
+                if [ "$want" = refused ]; then
+                  if [ "$status" = 0 ]; then
+                    echo "$l on $pages-byte pages, switch $switch: chose $got, wanted a refusal"
+                    cat "$TMPDIR/said"
                     exit 1
                   fi
-                  for pages in 16384 65536; do
-                    if (
-                      source "$l"
-                      require_4k_pages "$pages" 2>"$TMPDIR/refusal"
-                    ); then
-                      echo "$l accepts a $pages-byte page kernel, where Valve's client and FEX cannot run"
-                      exit 1
-                    fi
-                    grep -qF -- "$pages-byte pages" "$TMPDIR/refusal" || {
-                      echo "$l refuses $pages-byte pages without naming them:"
-                      cat "$TMPDIR/refusal"
-                      exit 1
-                    }
-                    for named in "-host package" "muvm's 4K-page guest" "programs.steam-arm64"; do
-                      grep -qF -- "$named" "$TMPDIR/refusal" || {
-                        echo "$l refuses without naming $named; the user ran a command whose name both"
-                        echo "packages share, so the refusal must name the package this is, the one to"
-                        echo "install instead, and the module option that picks between them:"
-                        cat "$TMPDIR/refusal"
-                        exit 1
-                      }
+                elif [ "$status" != 0 ] || [ "$got" != "$want" ]; then
+                  echo "$l on $pages-byte pages, switch $switch: chose ''${got:-nothing} with exit $status, wanted $want"
+                  cat "$TMPDIR/said"
+                  exit 1
+                fi
+                if [ ! -s "$TMPDIR/said" ]; then
+                  echo "$l on $pages-byte pages, switch $switch: chose without saying which path or why"
+                  exit 1
+                fi
+              }
+              said() {
+                grep -qF -- "$2" "$TMPDIR/said" || {
+                  echo "$1 does not name $2:"
+                  cat "$TMPDIR/said"
+                  exit 1
+                }
+              }
+              for entry in ${lib.escapeShellArgs launchers}; do
+                read -r kind switch l <<<"$entry"
+                expect "$l" 4096 gives host
+                for pages in 16384 65536; do
+                  case "$kind $switch" in
+                  "guest switch")
+                    expect "$l" "$pages" gives switch
+                    expect "$l" "$pages" refuses guest
+                    said "$l" "Invalid argument"
+                    ;;
+                  "guest none")
+                    expect "$l" "$pages" refuses guest
+                    ;;
+                  "host switch")
+                    expect "$l" "$pages" gives switch
+                    expect "$l" "$pages" refuses refused
+                    said "$l" "Invalid argument"
+                    ;;
+                  "host none")
+                    expect "$l" "$pages" refuses refused
+                    for named in "$pages-byte pages" "-host package" "muvm's 4K-page guest" "programs.steam-arm64"; do
+                      said "$l" "$named"
                     done
-                  done
+                    ;;
+                  esac
                 done
-                touch "$out"
-              '';
+              done
+              touch "$out"
+            '';
 
           checks.client-tree = pkgs.runCommand "steam-arm64-client-tree" { } ''
             test -d ${self'.packages.default}/steamrtarm64/libs

@@ -23,6 +23,7 @@ let
   pageSizeText =
     if pageSize == null then "an unknown page size" else "${toString pageSize}-byte pages";
   host = pageSize == 4096;
+  fexOnHost = host || cfg.pageSwitch != null;
   fexRootfs = "/run/fex-emu/rootfs";
   ports = import ./ports.nix;
   portText =
@@ -72,12 +73,13 @@ let
     launcher: tools:
     launcher.override {
       guest = !host;
+      inherit (cfg) pageSwitch;
       extraCompatTools = tools;
     };
 in
 {
   options.programs.steam-arm64 = {
-    enable = lib.mkEnableOption "Valve's aarch64 Steam client: inside muvm's 4K-page guest on a 16K or 64K kernel, straight on the host on a 4K kernel";
+    enable = lib.mkEnableOption "Valve's aarch64 Steam client: straight on the host on a 4K kernel; on a 16K or 64K kernel on the host when pageSwitch gives it 4K pages at launch, otherwise inside muvm's 4K-page guest";
     package = lib.mkOption {
       type = lib.types.package;
       default = pkgs.steam-arm64;
@@ -88,6 +90,11 @@ in
     pageSize = lib.mkOption {
       type = lib.types.enum (lib.attrValues granules);
       description = "the kernel's page size in bytes, which decides whether the clients run on the host (4096) or inside muvm's guest. Derived from the kernel's configuration when it states ARM64_4K_PAGES, ARM64_16K_PAGES or ARM64_64K_PAGES; state it only when the kernel does not, with the value getconf PAGESIZE prints";
+    };
+    pageSwitch = lib.mkOption {
+      type = lib.types.nullOr lib.types.package;
+      default = null;
+      description = "a program that runs a command with 4K pages on a kernel whose own pages are larger, called as `<program> 4k <command> <args>`: the userpages launcher of a kernel built with per-program page sizes (aurora-linux-nixos's packages.userpages for omacom's Aurora kernel, booted with user4k=on). Each launch first asks it for 4K pages and runs the clients on the host only when a program started through it reports 4096; otherwise they run in muvm's guest as without it. Null, the default, adds nothing to the closure";
     };
     hostBinfmt = lib.mkOption {
       type = lib.types.bool;
@@ -145,8 +152,12 @@ in
             }";
       }
       {
-        assertion = cfg.hostBinfmt -> host;
-        message = "programs.steam-arm64.hostBinfmt: FEX runs on 4K-page kernels only and this kernel uses ${pageSizeText}; off 4K the clients run inside muvm's guest, which registers FEX itself";
+        assertion = cfg.pageSwitch != null -> !host;
+        message = "programs.steam-arm64.pageSwitch: this kernel already uses 4K pages, so the clients run on the host and the switch would never be asked; drop it";
+      }
+      {
+        assertion = cfg.hostBinfmt -> fexOnHost;
+        message = "programs.steam-arm64.hostBinfmt: FEX needs 4K pages and this kernel uses ${pageSizeText} with no pageSwitch to give a program 4K pages; off 4K the clients run inside muvm's guest, which registers FEX itself";
       }
       {
         assertion = cfg.hostBinfmt -> crowdedMagics == { };
@@ -160,8 +171,8 @@ in
         }; the kernel runs the first registered and the others never see a binary, so drop the other handler (an x86 entry in boot.binfmt.emulatedSystems, say) or hostBinfmt";
       }
       {
-        assertion = cfg.x86.enable && host -> cfg.hostBinfmt;
-        message = "programs.steam-arm64.x86: on a 4K-page host the x86 client runs under the host's FEX and needs programs.steam-arm64.hostBinfmt for the binfmt handler and the FEX rootfs";
+        assertion = cfg.x86.enable && fexOnHost -> cfg.hostBinfmt;
+        message = "programs.steam-arm64.x86: on a 4K-page host, or with pageSwitch, the x86 client runs under the host's FEX and needs programs.steam-arm64.hostBinfmt for the binfmt handler and the FEX rootfs";
       }
     ];
 

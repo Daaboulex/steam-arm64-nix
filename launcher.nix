@@ -14,6 +14,7 @@
   steam-x86-rootfs,
   channel,
   guest ? true,
+  pageSwitch ? null,
   extraCompatTools ? [ ],
 }:
 let
@@ -46,9 +47,9 @@ runCommand
     meta = {
       description =
         if guest then
-          "Valve's aarch64 Steam client, launched in the 4K-page guest its binaries need"
+          "Valve's aarch64 Steam client, launched with the 4K pages its binaries need: on the host when the kernel or the page switch gives them, otherwise in muvm's 4K-page guest"
         else
-          "Valve's aarch64 Steam client, launched straight on a host whose kernel uses 4K pages";
+          "Valve's aarch64 Steam client, launched straight on a host whose kernel or page switch gives it 4K pages";
       license = lib.licenses.unfree;
       platforms = [ "aarch64-linux" ];
       mainProgram = "steam-arm64";
@@ -62,7 +63,8 @@ runCommand
         muvm = lib.optionalString guest (lib.getExe muvm);
         xrdb = lib.getExe' xrdb "xrdb";
         flock = lib.optionalString guest (lib.getExe' util-linux "flock");
-        getconf = lib.optionalString (!guest) (lib.getExe' glibc "getconf");
+        getconf = lib.getExe' glibc "getconf";
+        pageSwitch = lib.optionalString (pageSwitch != null) (lib.getExe pageSwitch);
         fhs = "${steam-arm64-fhs}";
         rootfs = lib.optionalString guest "${steam-x86-rootfs}";
         ports = lib.optionalString guest (

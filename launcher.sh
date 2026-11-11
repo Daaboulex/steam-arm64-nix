@@ -24,11 +24,30 @@ cursor_from_desktop() {
   fi
 }
 
-require_4k_pages() {
-  if [ "$1" != 4096 ]; then
-    echo "steam-arm64: this kernel uses $1-byte pages and Valve's client needs 4096; this is the steam-arm64-host package, built for a 4K kernel: install steam-arm64 instead, which starts the client in muvm's 4K-page guest, or let programs.steam-arm64 pick by pageSize" >&2
-    return 1
+choose_path() {
+  local native switched refusal
+  native=$("@getconf@" PAGESIZE)
+  if [ "$native" = 4096 ]; then
+    path=host
+    echo "steam-arm64: this kernel uses 4K pages, so the client runs on the host" >&2
+    return 0
   fi
+  refusal="this kernel uses $native-byte pages and Valve's client needs 4096"
+  if [ -n "@pageSwitch@" ]; then
+    if switched=$("@pageSwitch@" 4k "@getconf@" PAGESIZE 2>&1) && [ "$switched" = 4096 ]; then
+      path=switch
+      echo "steam-arm64: this kernel uses $native-byte pages and @pageSwitch@ gives a program 4K pages, so the client runs on the host with them" >&2
+      return 0
+    fi
+    refusal="$refusal, and @pageSwitch@ did not give a program 4K pages (it printed: ${switched:-nothing})"
+  fi
+  if [ "@guest@" = 1 ]; then
+    path=guest
+    echo "steam-arm64: $refusal, so the client runs in muvm's 4K-page guest" >&2
+    return 0
+  fi
+  echo "steam-arm64: $refusal; this is the steam-arm64-host package, built without muvm's guest: install steam-arm64 instead, which starts the client in muvm's 4K-page guest, or let programs.steam-arm64 pick by pageSize" >&2
+  return 1
 }
 
 stdin_as_pipe() {
@@ -81,6 +100,10 @@ run_on_host() {
   "@fhs@/bin/steam-arm64-fhs" "$@"
 }
 
+run_with_switch() {
+  "@pageSwitch@" 4k "@fhs@/bin/steam-arm64-fhs" "$@"
+}
+
 main() {
   steam_root="${STEAM_ARM64_ROOT:-${XDG_DATA_HOME:-$HOME/.local/share}/Steam}"
 
@@ -110,7 +133,9 @@ main() {
     export STEAM_EXTRA_COMPAT_TOOLS_PATHS="@compatTools@${STEAM_EXTRA_COMPAT_TOOLS_PATHS:+:$STEAM_EXTRA_COMPAT_TOOLS_PATHS}"
   fi
 
-  if [ "@guest@" = 1 ]; then
+  choose_path
+  case $path in
+  guest)
     guest_env=()
     for var in STEAM_ARM64_ROOT MESA_SHADER_CACHE_MAX_SIZE STEAM_COMPAT_GRAPHICS_PROVIDER \
       XCURSOR_THEME XCURSOR_SIZE XCURSOR_PATH DBUS_SESSION_BUS_ADDRESS STEAM_EXTRA_COMPAT_TOOLS_PATHS LOCALE_ARCHIVE; do
@@ -120,10 +145,10 @@ main() {
     done
     stdin_as_pipe
     run=run_in_guest
-  else
-    require_4k_pages "$("@getconf@" PAGESIZE)"
-    run=run_on_host
-  fi
+    ;;
+  switch) run=run_with_switch ;;
+  host) run=run_on_host ;;
+  esac
 
   restart_loop "$run" "$@"
 }
