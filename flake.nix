@@ -20,7 +20,14 @@
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = [ "aarch64-linux" ];
 
-      imports = [ inputs.std.flakeModules.base ];
+      imports = [
+        inputs.std.flakeModules.base
+        {
+          perSystem.std.option-reference = {
+            "NixOS module" = ./module.nix;
+          };
+        }
+      ];
 
       perSystem =
         {
