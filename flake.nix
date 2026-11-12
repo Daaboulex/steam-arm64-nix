@@ -80,6 +80,11 @@
             };
         in
         {
+          std.detect.shell = {
+            mode = "gate";
+            paths = [ "." ];
+          };
+
           packages.steam-arm64-client = pkgs.callPackage ./package.nix { channel = "stable"; };
           packages.steam-arm64-client-beta = pkgs.callPackage ./package.nix { channel = "publicbeta"; };
           packages.default = self'.packages.steam-arm64-client;

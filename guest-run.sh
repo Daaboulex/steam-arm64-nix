@@ -64,12 +64,15 @@ if [ "${1:-}" = "--doctor" ]; then
   check "Valve's FEX tool installed (Steam app 3127680)" test -x "$tools/FEX-Emu/fex-compat-tool"
   check "Valve's FEX tool starts" env STEAM_COMPAT_DATA_PATH=/tmp "$tools/FEX-Emu/fex-compat-tool" --help
   check "Steam Linux Runtime 4.0 arm64 installed (app 4185400)" test -x "$tools/SteamLinuxRuntime_4-arm64/pressure-vessel/bin/pressure-vessel-wrap"
+  # shellcheck disable=SC2016
   check "Proton (ARM64) installed" sh -c 'ls -d "$1"/Proton*ARM64*/proton >/dev/null 2>&1' sh "$tools"
   check "GPU render node visible to the client" test -e /dev/dri/renderD128
+  # shellcheck disable=SC2329
   game_sees_gpu() {
     local vulkaninfo=$1 triplet=$2 scratch rc
     shift 2
     scratch=$(mktemp -d)
+    # shellcheck disable=SC2016
     STEAM_COMPAT_DATA_PATH="$scratch" STEAM_COMPAT_CLIENT_INSTALL_PATH="$steam_root" "$@" sh -c '
       summary=$("$1" --summary 2>/dev/null)
       case "$summary" in

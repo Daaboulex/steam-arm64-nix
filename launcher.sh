@@ -33,6 +33,7 @@ choose_path() {
     return 0
   fi
   refusal="this kernel uses $native-byte pages and Valve's client needs 4096"
+  # shellcheck disable=SC2157
   if [ -n "@pageSwitch@" ]; then
     if switched=$("@pageSwitch@" 4k "@getconf@" PAGESIZE 2>&1) && [ "$switched" = 4096 ]; then
       path=switch
@@ -41,6 +42,7 @@ choose_path() {
     fi
     refusal="$refusal, and @pageSwitch@ did not give a program 4K pages (it printed: ${switched:-nothing})"
   fi
+  # shellcheck disable=SC2050
   if [ "@guest@" = 1 ]; then
     path=guest
     echo "steam-arm64: $refusal, so the client runs in muvm's 4K-page guest" >&2
@@ -112,6 +114,7 @@ main() {
     mkdir -p -- "$steam_root"
     cp --archive --no-target-directory -- "@client@" "$steam_root"
     chmod -R u+rwX -- "$steam_root"
+    # shellcheck disable=SC2050
     if [ "@channel@" != stable ]; then
       mkdir -p -- "$steam_root/package"
       printf '%s\n' "@channel@" >"$steam_root/package/beta"
@@ -129,6 +132,7 @@ main() {
   export STEAM_ARM64_ROOT="$steam_root"
   export MESA_SHADER_CACHE_MAX_SIZE=50G
   export STEAM_COMPAT_GRAPHICS_PROVIDER=/run/fex-emu/rootfs/graphics_provider.json
+  # shellcheck disable=SC2157
   if [ -n "@compatTools@" ]; then
     export STEAM_EXTRA_COMPAT_TOOLS_PATHS="@compatTools@${STEAM_EXTRA_COMPAT_TOOLS_PATHS:+:$STEAM_EXTRA_COMPAT_TOOLS_PATHS}"
   fi
