@@ -56,4 +56,4 @@ if [ "${1:-}" = "--doctor" ]; then
   exit "$status"
 fi
 
-exec @fexinterpreter@ /usr/bin/bash @steam@ -cef-disable-gpu "$@"
+exec @fex@ /usr/bin/bash @steam@ -cef-disable-gpu "$@"

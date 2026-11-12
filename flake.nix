@@ -37,7 +37,7 @@
             inherit system;
             config = consumerConfig;
           };
-          muvm = pkgs.callPackage ./muvm-patched.nix { inherit (self'.packages) fex-interpreter; };
+          muvm = pkgs.callPackage ./muvm-patched.nix { };
           fakePageSwitch = pkgs.writeShellScriptBin "page-switch" ''
             [ "$1" = 4k ] || exit 2
             shift
@@ -97,11 +97,10 @@
             inherit (self'.packages) steam-runtime-arm64-libs;
           };
           packages.steam-x86-rootfs = pkgs.callPackage ./fex-rootfs-x86.nix { };
-          packages.fex-interpreter = pkgs.callPackage ./fex-interpreter.nix { };
           packages.fex-emulator-x86 = pkgs.callPackage ./fex-emulator-x86.nix { };
           packages.steam-x86-fhs = pkgs.callPackage ./fhs-x86.nix {
             steam-x86-entry = pkgs.steam-unwrapped;
-            inherit (self'.packages) fex-emulator-x86 fex-interpreter;
+            inherit (self'.packages) fex-emulator-x86;
           };
           packages.steam-x86 = pkgs.callPackage ./launcher-x86.nix {
             inherit muvm;
@@ -163,12 +162,12 @@
                 touch "$out"
               '';
 
-          checks.fex-interpreter-still-needed = pkgs.runCommand "fex-interpreter-still-needed" { } ''
-            if ! grep -qF 'find_in_path("FEXInterpreter")' ${pkgs.muvm.src}/crates/muvm/src/guest/fex.rs; then
-              echo "muvm ${pkgs.muvm.version} no longer looks up FEXInterpreter on the guest's PATH."
-              echo "Read guest/fex.rs. If it finds FEX by the name FEX ${pkgs.fex.version} installs,"
-              echo "delete fex-interpreter.nix, the wrapProgram in muvm-patched.nix, the alias in"
-              echo "guest-run-x86.sh and fhs-x86.nix (exec FEX itself there), and this check."
+          checks.muvm-finds-fex = pkgs.runCommand "muvm-finds-fex" { } ''
+            if ! grep -qF 'find_in_path("FEX")' ${pkgs.muvm.src}/crates/muvm/src/guest/fex.rs; then
+              echo "muvm ${pkgs.muvm.version} no longer looks up FEX by the name FEX on the guest's PATH."
+              echo "Read guest/fex.rs for the name it wants now. muvm-patched.nix puts FEX ${pkgs.fex.version}'s"
+              echo "bin on that PATH, which carries only FEX; without the name muvm wants, the guest"
+              echo "registers no x86 binfmt and no x86 game starts."
               exit 1
             fi
             touch "$out"
@@ -574,7 +573,7 @@
               }
             grep -qF '${lib.getExe muvm}' "$l" \
               || {
-                echo "the native client's launcher does not start the muvm whose PATH carries FEXInterpreter"
+                echo "the native client's launcher does not start the muvm whose PATH carries FEX"
                 exit 1
               }
             rootfs=${self'.packages.steam-arm64-fhs.fhsenv}
@@ -748,16 +747,15 @@
 
           checks.muvm-guest-path = pkgs.runCommand "muvm-guest-path" { } ''
             wrapper=${lib.getExe muvm}
-            for needed in ${pkgs.socat}/bin ${self'.packages.fex-interpreter}/bin; do
+            for needed in ${pkgs.socat}/bin ${pkgs.fex}/bin; do
               grep -qaF -- "$needed" "$wrapper" "$(dirname "$wrapper")"/.muvm-wrapped* || {
                 echo "the muvm wrapper's PATH prefix lost $needed."
                 echo "muvm forwards the PATH it runs with into the guest (env.rs). There its"
                 echo "init runs socat for the pulse and session bus proxies, and setup_socket_proxy"
                 echo "returns Ok without a word when socat is absent, so the tray falls back to"
                 echo "an XEmbed icon with no name and no menu; and it registers the x86 binfmt by"
-                echo "finding FEXInterpreter, a name FEX no longer installs, so without the alias"
-                echo "no x86 game starts. nixpkgs' wrapper carries socat; muvm-patched.nix adds"
-                echo "the alias."
+                echo "finding FEX there, so without FEX's bin no x86 game starts. nixpkgs' wrapper"
+                echo "carries socat; muvm-patched.nix adds FEX."
                 exit 1
               }
             done
@@ -765,7 +763,7 @@
               ${self'.packages.steam-x86}/bin/steam-x86; do
               if grep -q '"PATH=' "$l"; then
                 echo "$l sets the guest's PATH itself, which replaces the one muvm forwards"
-                echo "and so drops socat and FEXInterpreter from it. Leave the guest PATH alone."
+                echo "and so drops socat and FEX from it. Leave the guest PATH alone."
                 exit 1
               fi
             done
@@ -779,7 +777,7 @@
                 steam-arm64 = {
                   launcher = "${self'.packages.steam-arm64-host}/bin/steam-arm64";
                   closure = pkgs.closureInfo { rootPaths = [ self'.packages.steam-arm64-host ]; };
-                  guestOnly = "-muvm- -steam-x86-fedora-rootfs -fex-interpreter";
+                  guestOnly = "-muvm- -steam-x86-fedora-rootfs";
                   wanted = [
                     "STEAM_COMPAT_GRAPHICS_PROVIDER=/run/fex-emu/rootfs/graphics_provider.json"
                     "${self'.packages.steam-arm64-fhs}/bin/steam-arm64-fhs"
@@ -1162,7 +1160,7 @@
               [ "$(cat "$TMPDIR/args")" = -shutdown ] || refuse "the native steamos-session-select did not ask the client to shut down: $(cat "$TMPDIR/args")"
               grep -qF -- '${pkgs.steam-unwrapped}/bin/steam -shutdown' ${x86}/usr/bin/steamos-session-select \
                 || refuse "the x86 steamos-session-select does not shut Valve's x86 client down through its steam.sh"
-              grep -qF '${self'.packages.fex-interpreter}/bin/FEXInterpreter' ${x86}/usr/bin/steamos-session-select \
+              grep -qF '${pkgs.fex}/bin/FEX /usr/bin/bash' ${x86}/usr/bin/steamos-session-select \
                 || refuse "the x86 steamos-session-select does not run steam.sh under FEX, so uname would not say x86_64"
               for pair in 'steam steamos-polkit-helpers/steamos-update' 'steamclient.so steamos-select-branch' 'steamui.so steamos-session-select'; do
                 set -- $pair
@@ -1328,7 +1326,6 @@
         steam-runtime-arm64-libs = final.callPackage ./runtime-libs.nix { };
         steam-arm64-fhs = final.callPackage ./fhs.nix { };
         steam-x86-rootfs = final.callPackage ./fex-rootfs-x86.nix { };
-        fex-interpreter = final.callPackage ./fex-interpreter.nix { };
         fex-emulator-x86 = final.callPackage ./fex-emulator-x86.nix { };
         steam-x86-fhs = final.callPackage ./fhs-x86.nix { steam-x86-entry = final.steam-unwrapped; };
         steam-x86 = final.callPackage ./launcher-x86.nix { };

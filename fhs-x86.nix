@@ -4,7 +4,6 @@
   replaceVars,
   runCommand,
   fex,
-  fex-interpreter,
   steam-x86-entry,
   fex-emulator-x86,
 }:
@@ -12,7 +11,7 @@ let
   guestRun = runCommand "steam-x86-guest-run" { } ''
     install -Dm755 ${
       replaceVars ./guest-run-x86.sh {
-        fexinterpreter = "${fex-interpreter}/bin/FEXInterpreter";
+        fex = "${fex}/bin/FEX";
         steam = "${steam-x86-entry}/bin/steam";
         dbusConf = "${./session-bus.conf}";
         appconfig = "${fex-emulator-x86}/share/fex-emu/AppConfig";
@@ -37,7 +36,7 @@ buildFHSEnv {
       xz
 
       (callPackage ./steamos-stubs.nix {
-        shutdown = "exec ${fex-interpreter}/bin/FEXInterpreter /usr/bin/bash ${steam-x86-entry}/bin/steam -shutdown";
+        shutdown = "exec ${fex}/bin/FEX /usr/bin/bash ${steam-x86-entry}/bin/steam -shutdown";
       })
     ];
 

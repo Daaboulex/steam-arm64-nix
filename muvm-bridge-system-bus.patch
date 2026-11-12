@@ -15,17 +15,18 @@ Upstream: none yet; it builds on muvm-bridge-dbus.patch for DBUS_SOCKET.
 
 --- a/crates/muvm/src/bin/muvm.rs
 +++ b/crates/muvm/src/bin/muvm.rs
-@@ -25,7 +25,8 @@
+@@ -27,8 +27,8 @@
  use muvm::net::{connect_to_passt, start_passt};
  use muvm::types::MiB;
  use muvm::utils::launch::{
--    GuestConfiguration, Launch, DBUS_SOCKET, HIDPIPE_SOCKET, MUVM_GUEST_SOCKET, PULSE_SOCKET,
-+    GuestConfiguration, Launch, DBUS_SOCKET, DBUS_SYSTEM_SOCKET, HIDPIPE_SOCKET, MUVM_GUEST_SOCKET,
-+    PULSE_SOCKET,
+-    GuestConfiguration, Launch, ATSPI_SOCKET, DBUS_SOCKET, HIDPIPE_SOCKET, MUVM_GUEST_SOCKET,
+-    PULSE_SOCKET,
++    GuestConfiguration, Launch, ATSPI_SOCKET, DBUS_SOCKET, DBUS_SYSTEM_SOCKET, HIDPIPE_SOCKET,
++    MUVM_GUEST_SOCKET, PULSE_SOCKET,
  };
  use nix::sys::sysinfo::sysinfo;
  use nix::unistd::User;
-@@ -324,6 +325,24 @@
+@@ -372,6 +372,24 @@
              }
          }
  
@@ -52,7 +53,7 @@ Upstream: none yet; it builds on muvm-bridge-dbus.patch for DBUS_SOCKET.
          let hidpipe_path = CString::new(
 --- a/crates/muvm/src/guest/bin/muvm-guest.rs
 +++ b/crates/muvm/src/guest/bin/muvm-guest.rs
-@@ -19,7 +19,9 @@
+@@ -20,7 +20,9 @@
  use muvm::guest::user::setup_user;
  use muvm::guest::x11::setup_x11_forwarding;
  use muvm::utils::env::get_var_if_exists;
@@ -63,7 +64,7 @@ Upstream: none yet; it builds on muvm-bridge-dbus.patch for DBUS_SOCKET.
  use nix::unistd::{Gid, Uid};
  use rustix::process::{getrlimit, setrlimit, Resource};
  
-@@ -218,6 +220,9 @@
+@@ -217,6 +219,9 @@
      let dbus_path = run_path.join("bus");
      setup_socket_proxy(dbus_path, DBUS_SOCKET)?;
  
@@ -75,8 +76,8 @@ Upstream: none yet; it builds on muvm-bridge-dbus.patch for DBUS_SOCKET.
      }
 --- a/crates/muvm/src/utils/launch.rs
 +++ b/crates/muvm/src/utils/launch.rs
-@@ -52,3 +52,4 @@
- pub const HIDPIPE_SOCKET: u32 = PULSE_SOCKET + 1;
+@@ -54,3 +54,4 @@
  pub const MUVM_GUEST_SOCKET: u32 = HIDPIPE_SOCKET + 1;
- pub const DBUS_SOCKET: u32 = MUVM_GUEST_SOCKET + 1;
+ pub const ATSPI_SOCKET: u32 = MUVM_GUEST_SOCKET + 1;
+ pub const DBUS_SOCKET: u32 = ATSPI_SOCKET + 1;
 +pub const DBUS_SYSTEM_SOCKET: u32 = DBUS_SOCKET + 1;
