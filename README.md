@@ -123,7 +123,6 @@ enters a closure only when one is passed.
   programs.steam-arm64 = {
     enable = true;
     x86.enable = true;
-    extraCompatPackages = [ pkgs.proton-ge ];
   };
 }
 ```
@@ -150,7 +149,7 @@ the native client; `x86.extraCompatPackages` takes x86-64 tools for the x86
 client, built as aarch64 derivations (a prebuilt tarball runs nothing at
 build time). `remotePlay.openFirewall` and `localNetworkGameTransfers.openFirewall`
 open on the host the ports both launchers publish out of the guest, from the
-one list in `ports.nix`. `checks.module-refusals` evaluates each refusal and
+one list in [`ports.nix`](./ports.nix). `checks.module-refusals` evaluates each refusal and
 the host and guest wiring.
 
 ## Devices
@@ -161,11 +160,11 @@ M1 row and the runner row are verified.
 
 | Device | Kernel pages | Path here | Verified |
 |---|---|---|---|
-| Apple M1, M2 (Asahi) | 16K | guest; GPU through muvm's native context (Asahi 7.1.5's regression fixed 2026-09-11) | yes, the M1 this is developed on |
-| Apple M1 and later on a kernel outside mainline with per-program 4K pages | 16K, with 4K per program where the kernel allows it | host through `pageSwitch` when the switch gives 4K pages at launch, guest otherwise | no; pull request 8's contributor reports Steam running this way on omacom's Aurora fork, a report this package has not reproduced |
+| Apple M1, M2 (Asahi) | 16K | guest; GPU through muvm's native context | yes, the M1 this is developed on |
+| Apple M1 and later on a kernel outside mainline with per-program 4K pages | 16K, with 4K per program where the kernel allows it | host through `pageSwitch` when the switch gives 4K pages at launch, guest otherwise | no |
 | Apple M3 (Asahi) | 16K | guest; Asahi says not to expect performant 3D yet (2026-09-06), so likely software GPU | no |
 | Apple M4 and later | no Asahi kernel | none | no |
-| Snapdragon X Elite, X Plus, X13s, SDM845 phones (Pocophone F1, Pixel 3) | 4K on mainline | host: `steam-arm64-host` and `steam-x86-host` with `hostBinfmt`; turnip Vulkan | the contributor's report in his PR #6 comment of 2026-11-07: on his Pocophone F1 everything works, the x86-64 runtime runs well and so does ARM64 Proton, with PR #6's host path; a report, not a doctor transcript, and this module's build has not run there |
+| Snapdragon X Elite, X Plus, X13s, SDM845 phones (Pocophone F1, Pixel 3) | 4K on mainline | host: `steam-arm64-host` and `steam-x86-host` with `hostBinfmt`; turnip Vulkan | no |
 | Raspberry Pi 5 | 16K with `kernel_2712.img`, 4K with `kernel8.img` | guest with software GPU (v3d has no muvm native context), or host on the 4K kernel | no |
 | Raspberry Pi 4 | 4K | host; v3dv Vulkan 1.2 | no |
 | RK3588 (Mali-G610, PanVK) | 4K | host | no |
@@ -176,12 +175,15 @@ M1 row and the runner row are verified.
 | GitHub `ubuntu-24.04-arm` runner | 4K | host, headless: the Host probe workflow registers FEX, mounts the rootfs and runs both doctors | by dispatching the workflow |
 | Steam Frame | SteamOS arm64, Valve's own client and FEX | not a NixOS target | n/a |
 
-## Usage
+## The client tree package
 
-The package is the unpacked client tree; its entry point is `steamrtarm64/steam`.
-The binaries are unpatched and ask for `/lib/ld-linux-aarch64.so.1`, so running
-them needs `programs.nix-ld.enable` or an FHS environment. Valve's client keeps
-itself current from the network once it is running.
+`steam-arm64-client`, the flake's default package, is the unpacked client tree;
+its entry point is `steamrtarm64/steam`. [`package.nix`](./package.nix) unpacks
+Valve's archives and patches nothing: the binaries ask for
+`/lib/ld-linux-aarch64.so.1`, so on NixOS the tree does not run by itself. The
+`steam-arm64` launchers copy it into a Steam root that holds no client yet and
+run it there inside the FHS environment of [`fhs.nix`](./fhs.nix). Valve's
+client keeps itself current from the network once it is running.
 
 ## Development
 
@@ -223,8 +225,7 @@ Valve's aarch64 web helper never carves the input shape of the window it
 embeds, so presses on the client's own title bar and edges never reach the
 window manager: the window's own chrome cannot move or resize it. The x86 web
 helper does carve it, and the traces of both clients prove the difference. The
-native client stays purely native all the same, because handing it the x86
-helper under FEX made its UI slow, and speed is what the native client is for.
+native client runs only Valve's aarch64 helper.
 Until Valve's aarch64 helper carries the shape code, KWin moves and resizes the
 window as it does any other: Meta with the left button drags it, Meta with the
 right button resizes it, and the three title bar buttons work.
@@ -277,7 +278,7 @@ its evidence: a Steam log under `logs/`, a launch log, or a probe of the guest.
 | x86 Linux games | works: Valve's FEX tool, the runtime the game names, Vulkan and GL from the FEX rootfs's x86 Mesa, no launch option | works, FEX with Runtime sniper | `steam-arm64 --doctor`: an x86-64 game under FEX gets the GPU's Vulkan and GL drivers |
 | aarch64 Linux games | native | not possible | by construction |
 | Gamepads | works through muvm's hidpipe, always on: host joysticks recreated by uinput in the guest, rumble included; no hidraw, since the guest kernel has no HID stack, so gyro, touchpad, lightbar and Steam Input's HID drivers are missing (AsahiLinux/muvm#244); on the host path hidraw is there once `hardware.steam-hardware.enable` grants it, and the doctor counts the devices | same | `controller.txt`: a DualSense opened in the native client; muvm `hidpipe_server.rs`; libkrunfw's aarch64 config; `steam-arm64 --doctor`'s hidraw line |
-| Remote Play, Steam Link, LAN transfer | the guest cannot announce itself: passt opens its sockets without broadcast and gives link-local multicast no scope, so the client's UDP broadcast to 27036 and its IPv6 multicast never leave. Both launchers publish the ports nixpkgs' `programs.steam` opens, from `ports.nix`: UDP 27031 to 27036 and 10400 to 10401, TCP 27036, 27037 and 27040; `programs.steam-arm64.remotePlay.openFirewall` and `localNetworkGameTransfers.openFirewall` open the same sets on the host (the discovery port UDP 27036 with either), so a LAN device's discovery, stream and transfer reach the guest through the host's bound sockets; untested with a device. Pairing by PIN and the same-account host list go through Steam's servers and need no broadcast | same | every launch log; `remote_connections.txt`; passt `udp_flow.c`, `util.c`, `pif.c`; `checks.remote-play-ports-published` |
+| Remote Play, Steam Link, LAN transfer | the guest cannot announce itself: passt opens its sockets without broadcast and gives link-local multicast no scope, so the client's UDP discovery broadcast and its IPv6 multicast never leave. Both launchers publish the ports nixpkgs' `programs.steam` opens, listed in [`ports.nix`](./ports.nix); `programs.steam-arm64.remotePlay.openFirewall` and `localNetworkGameTransfers.openFirewall` open the same sets on the host (the discovery port with either), so a LAN device's discovery, stream and transfer reach the guest through the host's bound sockets; untested with a device. Pairing by PIN and the same-account host list go through Steam's servers and need no broadcast | same | every launch log; `remote_connections.txt`; passt `udp_flow.c`, `util.c`, `pif.c`; `checks.remote-play-ports-published` |
 | Running on the host, no microVM | on a 4K kernel, or on a larger one whose page switch gives a launched program 4096-byte pages, both measured at each launch; `steam-arm64-host` refuses any other kernel and names the guest launcher; the switch path is untested on hardware | `steam-x86-host`: Valve's x86 client under the host's FEX, with `hostBinfmt`, by the same choice | `checks.launcher-chooses-a-path`, `checks.steam-arm64-host-wiring`, `checks.module-refusals`; the Host probe on the 4K runner |
 | Deck UI (`-gamepadui -steamos3 -steampal -steamdeck`) | the SteamOS helpers the client calls are stood in: an update check answers no update, the branch list is `rel` and a switch is refused, Power to desktop shuts the client down; no gamescope session here; the UI itself unverified | the same helpers in the x86 FHS, unverified | `checks.steamos-stubs`; the helper names in `steamui.so`, `steamclient.so` and `steam` |
 | Restart after a self-update | the client exits 42 and the launcher runs it again; five requests in a row that each lasted under a minute stop it | Valve's `steam.sh` in the x86 bootstrap restarts on 42 itself (`MAGIC_RESTART_EXITCODE`) | `checks.launcher-restart-loop`; `steam.sh` in `bootstraplinux_ubuntu12_32.tar.xz` |
@@ -313,9 +314,9 @@ misses at each container start, which is upstream noise.
 
 ## Updates
 
-`scripts/update.sh [stable|publicbeta]` regenerates `client-sources/<channel>.nix`
-from Valve's manifest, which carries each component's sha256; with no argument
-it regenerates both channels.
+[`scripts/update.sh`](./scripts/update.sh) regenerates `client-sources/<channel>.nix`
+from Valve's manifest, which carries each component's sha256. It takes `stable`
+or `publicbeta`, and with no argument it regenerates both channels.
 
 ## License
 
