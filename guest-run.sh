@@ -64,8 +64,18 @@ if [ "${1:-}" = "--doctor" ]; then
   check "Valve's FEX tool installed (Steam app 3127680)" test -x "$tools/FEX-Emu/fex-compat-tool"
   check "Valve's FEX tool starts" env STEAM_COMPAT_DATA_PATH=/tmp "$tools/FEX-Emu/fex-compat-tool" --help
   check "Steam Linux Runtime 4.0 arm64 installed (app 4185400)" test -x "$tools/SteamLinuxRuntime_4-arm64/pressure-vessel/bin/pressure-vessel-wrap"
-  # shellcheck disable=SC2016
-  check "Proton (ARM64) installed" sh -c 'ls -d "$1"/Proton*ARM64*/proton >/dev/null 2>&1' sh "$tools"
+  arm64_protons=()
+  if [ -d "$tools" ]; then
+    while IFS= read -r dir; do
+      arm64_protons+=("$dir")
+    done < <(find "$tools" -mindepth 1 -maxdepth 1 -name 'Proton*ARM64*' | sort)
+  fi
+  if [ "${#arm64_protons[@]}" -eq 0 ]; then
+    printf 'info  Proton (ARM64) not installed yet; Steam downloads it with the first Windows game\n'
+  fi
+  for dir in "${arm64_protons[@]}"; do
+    check "Proton (ARM64) complete: ${dir##*/}" test -x "$dir/proton"
+  done
   check "GPU render node visible to the client" test -e /dev/dri/renderD128
   # shellcheck disable=SC2329
   game_sees_gpu() {

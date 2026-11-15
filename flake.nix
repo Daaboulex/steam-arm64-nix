@@ -708,6 +708,48 @@
             touch "$out"
           '';
 
+          checks.doctor-reports-proton-arm64 =
+            pkgs.runCommand "doctor-reports-proton-arm64"
+              {
+                nativeBuildInputs = [
+                  pkgs.findutils
+                  pkgs.gnugrep
+                  pkgs.gnused
+                ];
+              }
+              ''
+                doctor() {
+                  STEAM_ARM64_ROOT=$1 XDG_RUNTIME_DIR=$TMPDIR bash ${./guest-run.sh} --doctor >"$TMPDIR/said" 2>"$TMPDIR/stderr" || true
+                }
+                expect_line() {
+                  grep -qxF -- "$1" "$TMPDIR/said" || {
+                    echo "$2: the doctor did not print '$1'; it said:"
+                    cat "$TMPDIR/said"
+                    echo "and on stderr:"
+                    cat "$TMPDIR/stderr"
+                    exit 1
+                  }
+                }
+                root=$TMPDIR/none
+                mkdir -p "$root/steamapps/common"
+                doctor "$root"
+                expect_line "info  Proton (ARM64) not installed yet; Steam downloads it with the first Windows game" "no Proton (ARM64) downloaded"
+                if grep -q 'Proton (ARM64)' <<<"$(grep '^FAIL' "$TMPDIR/said")"; then
+                  echo "no Proton (ARM64) downloaded yet is reported as a failure"
+                  exit 1
+                fi
+                root=$TMPDIR/complete
+                mkdir -p "$root/steamapps/common/Proton 11.0 (ARM64)"
+                install -m755 /dev/null "$root/steamapps/common/Proton 11.0 (ARM64)/proton"
+                doctor "$root"
+                expect_line "ok    Proton (ARM64) complete: Proton 11.0 (ARM64)" "a complete Proton (ARM64)"
+                root=$TMPDIR/broken
+                mkdir -p "$root/steamapps/common/Proton - Experimental (ARM64)"
+                doctor "$root"
+                expect_line "FAIL  Proton (ARM64) complete: Proton - Experimental (ARM64)" "a Proton (ARM64) directory without its proton script"
+                touch "$out"
+              '';
+
           checks.host-probe-pins-follow-the-standard =
             pkgs.runCommand "host-probe-pins-follow-the-standard" { }
               ''
